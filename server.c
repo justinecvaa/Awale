@@ -116,9 +116,54 @@ static void app(void)
                   send_message_to_all_clients(clients, client, actual, buffer, 1);
                }
                else
-               {
-                  send_message_to_all_clients(clients, client, actual, buffer, 0);
-               }
+                    {
+                        // Check if the client requested the list of connected clients
+                        if (strcmp(buffer, "list") == 0)
+                        {
+                            char client_list[BUF_SIZE] = "Connected clients:\n";
+                            for (int j = 0; j < actual; j++)
+                            {
+                                strncat(client_list, clients[j].name, BUF_SIZE - strlen(client_list) - 1);
+                                strncat(client_list, "\n", BUF_SIZE - strlen(client_list) - 1);
+                            }
+                            write_client(client.sock, client_list); // Send the list back to the requesting client
+                        }
+                        else if (strncmp(buffer, "challenge ", 10) == 0)
+                        {
+                            char *challenged_name = buffer + 10; // Get the name after "challenge "
+                            challenged_name[strcspn(challenged_name, "\n")] = 0; // Remove newline if present
+                            
+                            for (int j = 0; j < actual; j++)
+                            {
+                                if (strcmp(clients[j].name, challenged_name) == 0)
+                                {
+                                    write_client(clients[j].sock, "You have been challenged by ");
+                                    write_client(clients[j].sock, client.name);
+                                    write_client(clients[j].sock, ". Do you accept? (yes/no)\n");
+
+                                    // Wait for a response from the challenged client
+                                    c = read_client(clients[j].sock, buffer);
+                                    buffer[c] = '\0'; // Ensure null termination
+                                    if (strcmp(buffer, "yes") == 0)
+                                    {
+                                        write_client(client.sock, "Challenge accepted. Starting game...\n");
+                                        write_client(clients[j].sock, "Challenge accepted. Starting game...\n");
+                                        // Start the game logic here
+                                    }
+                                    else
+                                    {
+                                        write_client(client.sock, "Challenge declined.\n");
+                                        write_client(clients[j].sock, "Challenge declined.\n");
+                                    }
+                                    break; // Exit the for loop after processing the challenge
+                                }
+                            }
+                        }
+                        else
+                        {
+                            send_message_to_all_clients(clients, client, actual, buffer, 0);
+                        }
+                    }
                break;
             }
          }
