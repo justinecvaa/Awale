@@ -1,34 +1,52 @@
-# Compiled object files
+# Prerequisites
+*.d
+
+# Object files
 *.o
+*.ko
+*.obj
+*.elf
 
-# Compiled dynamic libraries
-*.so
+# Linker output
+*.ilk
+*.map
+*.exp
 
-# Compiled static libraries
-*.a
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
 *.lib
+*.a
+*.la
+*.lo
 
-# Executable files
-*.out
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
 *.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
 
 # Debug files
 *.dSYM/
-*.d
+*.su
+*.idb
+*.pdb
 
-# Dependency files
-*.d
-
-# Backup files
-*~
-
-# Temporary files
-*.tmp
-*.temp
-
-# Logs
-*.log
-
-# IDE specific files
-.vscode/
-.idea/
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
