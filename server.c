@@ -5,6 +5,7 @@
 
 #include "server.h"
 #include "client2.h"
+#include "awale.h"
 
 static void init(void)
 {
@@ -149,6 +150,14 @@ static void app(void)
                                         write_client(client.sock, "Challenge accepted. Starting game...\n");
                                         write_client(clients[j].sock, "Challenge accepted. Starting game...\n");
                                         // Start the game logic here
+                                        AwaleGame game;
+                                        initializeGame(&game);
+                                        char serializedGameBuffer[BUF_SIZE];
+                                        serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                        //printf("%s", serializedGameBuffer);
+                                        write_client(client.sock, serializedGameBuffer);
+                                        write_client(clients[j].sock, serializedGameBuffer);
+                                        printGame(&game);
                                     }
                                     else
                                     {

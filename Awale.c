@@ -100,8 +100,8 @@ bool makeMove(AwaleGame* game, int house) {
 
 // Fonction pour convertir l'état du jeu en chaîne de caractères pour le réseau
 void serializeGame(const AwaleGame* game, char* buffer, size_t bufferSize) {
-    snprintf(buffer, bufferSize,
-        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%s",
+    snprintf (buffer, bufferSize,
+        "game:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%s",
         game->board[0][0], game->board[0][1], game->board[0][2],
         game->board[0][3], game->board[0][4], game->board[0][5],
         game->board[1][0], game->board[1][1], game->board[1][2],
@@ -114,8 +114,10 @@ void serializeGame(const AwaleGame* game, char* buffer, size_t bufferSize) {
 
 // Fonction pour reconstituer l'état du jeu à partir d'une chaîne de caractères
 void deserializeGame(AwaleGame* game, const char* buffer) {
+    char prefix[10];
     int messageLen;
-    sscanf(buffer, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%[^\n]",
+    sscanf(buffer, "%5[^:]:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%[^\n]",
+        prefix,
         &game->board[0][0], &game->board[0][1], &game->board[0][2],
         &game->board[0][3], &game->board[0][4], &game->board[0][5],
         &game->board[1][0], &game->board[1][1], &game->board[1][2],
@@ -146,7 +148,7 @@ void printGame(const AwaleGame* game) {
 }
 
 // Fonction principale
-int main() {
+/*int main() {
     AwaleGame game;
 
     printf("1. New Game\n");
@@ -200,4 +202,4 @@ int main() {
     
     printGame(&game);
     return 0;
-}
+}*/

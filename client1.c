@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "client1.h"
+#include "awale.h"
 
 static void init(void)
 {
@@ -31,6 +32,8 @@ static void app(const char *address, const char *name)
    char buffer[BUF_SIZE];
 
    fd_set rdfs;
+
+   AwaleGame game;
 
    /* send our name */
    write_server(sock, name);
@@ -79,7 +82,17 @@ static void app(const char *address, const char *name)
             printf("Server disconnected !\n");
             break;
          }
-         puts(buffer);
+         printf("Received: %s\n", buffer);
+         // Appel de deserializeGameBuffer si le buffer est un buffer de jeu
+         if (strncmp(buffer, "game:", 5) == 0) // Par exemple, vérifier si le buffer commence par "game:"
+         {
+            deserializeGame(&game, buffer); // Afficher le jeu
+            printGame(&game);
+         }
+         else
+         {
+            puts(buffer); // Afficher le message normal
+         }
       }
    }
 
