@@ -1,20 +1,7 @@
+#include "awale.h"
+#include "awale_save.h"
 #include <stdio.h>
-#include <stdbool.h>
 #include <string.h>
-
-#define HOUSES 6
-#define SEEDS 4
-
-// Structure pour représenter l'état du jeu Awale
-typedef struct {
-    int board[2][HOUSES];    // Plateau de jeu
-    int score[2];           // Scores des joueurs
-    int currentPlayer;      // Joueur actuel (0 ou 1)
-    bool gameOver;          // État de fin de partie
-    char message[256];      // Message pour la communication client-serveur
-    int lastMove;           // Dernier coup joué
-    int winner;             // Gagnant (-1: pas de gagnant, 0: joueur 1, 1: joueur 2, 2: égalité)
-} AwaleGame;
 
 // Initialise une nouvelle partie
 void initializeGame(AwaleGame* game) {
@@ -139,7 +126,7 @@ void deserializeGame(AwaleGame* game, const char* buffer) {
         &messageLen, game->message);
 }
 
-// Fonction d'affichage adaptée pour la nouvelle structure
+// Fonction d'affichage
 void printGame(const AwaleGame* game) {
     printf("\nPlayer 2: ");
     for (int i = HOUSES - 1; i >= 0; i--) {
@@ -158,26 +145,54 @@ void printGame(const AwaleGame* game) {
     printf("\nMessage: %s\n", game->message);
 }
 
-// Exemple d'utilisation
+// Fonction principale
 int main() {
     AwaleGame game;
+
+    printf("1. New Game\n");
+    printf("2. Load Game\n");
+    printf("Choice: ");
+
+    int choice;
+    scanf("%d", &choice);
+    while (getchar() != '\n');
+
+    if (choice == 2) {
+        handleLoadCommand(&game);
+    }
+    if (choice == 1) {
     initializeGame(&game);
+    }
     char buffer[1024];
-    
+    char input[20];
+
     while (!game.gameOver) {
         printGame(&game);
-        
         int house;
-        printf("Player %d, choose a house (1-%d): ", game.currentPlayer + 1, HOUSES);
-        if (scanf("%d", &house) == 1) {
-            if (makeMove(&game, house - 1)) {
-                // Exemple de sérialisation/désérialisation
-                serializeGame(&game, buffer, sizeof(buffer));
-                printf("\nSerialized game state: %s\n", buffer);
-                
-                // Simuler l'envoi/réception réseau
-                AwaleGame receivedGame;
-                deserializeGame(&receivedGame, buffer);
+        printf("Player %d, enter a house number (1-%d) or 'save' to save the game: ", 
+               game.currentPlayer + 1, HOUSES);
+
+        if (scanf("%19s", input) == 1) {
+            // Vérifier si c'est une commande de sauvegarde
+            if (strcmp(input, "save") == 0) {
+                handleSaveCommand(&game);
+                continue;
+            } else {
+                // Convertir l'entrée en nombre
+                house = atoi(input);
+                if (house >= 1 && house <= HOUSES) {
+                    if (makeMove(&game, house - 1)) {
+                        // Sérialisation normale pour le réseau
+                        serializeGame(&game, buffer, sizeof(buffer));
+                        printf("\nSerialized game state: %s\n", buffer);
+                        
+                        // Simuler l'envoi/réception réseau
+                        AwaleGame receivedGame;
+                        deserializeGame(&receivedGame, buffer);
+                    }
+                } else {
+                    printf("Invalid input. Please enter a number between 1 and %d or 'save'.\n", HOUSES);
+                }
             }
         }
         while (getchar() != '\n'); // Vider le buffer
