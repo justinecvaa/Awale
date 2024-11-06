@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/select.h>
 
 #include "client1.h"
 #include "awale.h"

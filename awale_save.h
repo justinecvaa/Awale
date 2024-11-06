@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <time.h>
+#include <limits.h>
 #include "awale.h"  // Inclut la définition de AwaleGame
 
 // Structure pour les métadonnées de la sauvegarde

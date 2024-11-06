@@ -6,6 +6,7 @@
 #include "server.h"
 #include "client2.h"
 #include "awale.h"
+#include <sys/select.h>
 
 static void init(void)
 {
@@ -72,7 +73,7 @@ static void app(void)
       {
          /* new client */
          SOCKADDR_IN csin = { 0 };
-         size_t sinsize = sizeof csin;
+         socklen_t sinsize = sizeof csin;
          int csock = accept(sock, (SOCKADDR *)&csin, &sinsize);
          if(csock == SOCKET_ERROR)
          {

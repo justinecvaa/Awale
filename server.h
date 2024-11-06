@@ -5,7 +5,7 @@
 
 #include <winsock2.h>
 
-#elif defined (linux)
+#elif defined (linux) || defined (__linux__)
 
 #include <sys/types.h>
 #include <sys/socket.h>
