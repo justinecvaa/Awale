@@ -30,20 +30,54 @@ void checkGameOver(AwaleGame* game) {
         sum2 += game->board[1][i];
     }
     
-    game->gameOver = (sum1 == 0 || sum2 == 0);
+    game->gameOver = (game->score[0] > 24 || game->score[1] > 24);
+
+    //Verifier si un joueur est en famine (aucune graine et l'autre joueur ne peut pas le nourrir)
+    bool famine1 = false, famine2 = false;
+    if ((sum1 == 0 || sum2 == 0) && !(sum1 == 0 && sum2 == 0)) {
+        if (sum1 == 0) {
+            famine1 = true;
+            for (int i = 0; i < HOUSES; i++) { // On verifie si une des cases du joueur 2 peut nourrir le joueur 1
+                if (game->board[1][i] >= HOUSES - i) {
+                    famine1 = false;
+                    break;
+                }
+                
+            }
+        } else {
+            famine2 = true;
+            for (int i = 0; i < HOUSES; i++) {
+                if (game->board[0][i] >= HOUSES - i) {
+                    famine2 = false;
+                    break;
+                }
+            }
+        }
+    }
+    if (famine1 || famine2) { // Si un joueur est en famine, la partie est terminée et on rajoute toutes les graines au score de l'autre joueur
+        if (famine1) { //Si le joueur 1 est en famine, on donne toutes les graines restantes au joueur 2
+            for (int i = 0; i < HOUSES; i++) {
+                game->score[1] += game->board[1][i];
+                game->board[1][i] = 0;
+            }
+        } else { //Si le joueur 2 est en famine, on donne toutes les graines restantes au joueur 1
+            for (int i = 0; i < HOUSES; i++) {
+                game->score[0] += game->board[0][i];
+                game->board[0][i] = 0;
+            }
+        }
+        game->gameOver = true;
+    }
     
     if (game->gameOver) {
-        // Ajouter les graines restantes aux scores
-        game->score[0] += sum1;
-        game->score[1] += sum2;
         
         // Déterminer le gagnant
         if (game->score[0] > game->score[1]) {
             game->winner = 0;
-            sprintf(game->message, "Player 1 wins with %d points!", game->score[0]);
+            sprintf(game->message, "Player 1 wins %swith %d points", famine2 ? "by famine " : "", game->score[0]);
         } else if (game->score[1] > game->score[0]) {
             game->winner = 1;
-            sprintf(game->message, "Player 2 wins with %d points!", game->score[1]);
+            sprintf(game->message, "Player 2 wins %swith %d points!", famine1 ? "by famine " : "", game->score[1]);
         } else {
             game->winner = 2;
             sprintf(game->message, "It's a tie with %d points each!", game->score[0]);
@@ -51,11 +85,29 @@ void checkGameOver(AwaleGame* game) {
     }
 }
 
+
+bool verifyMove(AwaleGame* game, int house) {
+    int opponentSeeds = 0;
+    for (int i = 0; i < HOUSES; i++) {
+        opponentSeeds += game->board[1 - game->currentPlayer][i];
+    }
+    if (opponentSeeds == 0) { // Si l'adversaire n'a pas de graines, le joueur doit le nourrir si possible
+        if (game->board[game->currentPlayer][house] < HOUSES - house) { // Vérifier si le joueur peut nourrir l'adversaire
+            strcpy(game->message, "You must feed the opponent");
+            return false;
+        }
+    }
+    if (house < 0 || house >= HOUSES || game->board[game->currentPlayer][house] == 0) {
+        strcpy(game->message, "Invalid move");
+        return false;
+    }
+    return true;
+}
 // Effectue un coup
 bool makeMove(AwaleGame* game, int house) {
     // Vérifier si le coup est valide
-    if (house < 0 || house >= HOUSES || game->board[game->currentPlayer][house] == 0) {
-        strcpy(game->message, "Invalid move");
+
+    if (!verifyMove(game, house)) {
         return false;
     }
 
@@ -77,8 +129,21 @@ bool makeMove(AwaleGame* game, int house) {
         }
     }
 
+    bool allSeeds = false;
+    //Si le coup doit prendre toutes les graines adverses, il ne prend rien
+    if(currentHouse == 5 && currentPlayer != game->currentPlayer){ //Si la derniere graine tombe dans la maison 5 adverse, on verifie combien de cases on prend après
+        allSeeds = true;
+        while (allSeeds && currentHouse >= 0) {
+            if (game->board[currentPlayer][currentHouse] != 2 && game->board[currentPlayer][currentHouse] != 3) { //Si on trouve une case qu'on ne peut pas prendre, on part en prise normale
+                allSeeds = false;
+            }
+            currentHouse--;
+        }
+    }
+
+
     // Capture des graines
-    while (currentPlayer != game->currentPlayer && 
+    while (!allSeeds && currentPlayer != game->currentPlayer && 
            (game->board[currentPlayer][currentHouse] == 2 || 
             game->board[currentPlayer][currentHouse] == 3)) {
         game->score[game->currentPlayer] += game->board[currentPlayer][currentHouse];
@@ -133,20 +198,20 @@ void deserializeGame(AwaleGame* game, const char* buffer) {
 }
 // Fonction d'affichage
 void printGame(const AwaleGame* game) {
-    printf("\nPlayer 2: ");
+    printf("\nOpponent: ");
     for (int i = HOUSES - 1; i >= 0; i--) {
-        printf("%2d ", game->board[1][i]);
+        printf("%2d ", game->board[1 - game->currentPlayer][i]);
     }
-    printf(" | Score: %d", game->score[1]);
+    printf(" | Score: %d", game->score[1 - game->currentPlayer]);
     printf("\n         ");
     for (int i = 0; i < HOUSES; i++) {
         printf("   ");
     }
-    printf("\nPlayer 1: ");
+    printf("\nYou: ");
     for (int i = 0; i < HOUSES; i++) {
-        printf("%2d ", game->board[0][i]);
+        printf("%2d ", game->board[game->currentPlayer][i]);
     }
-    printf(" | Score: %d", game->score[0]);
+    printf(" | Score: %d", game->score[game->currentPlayer]);
     printf("\nMessage: %s\n", game->message);
 }
 
