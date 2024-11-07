@@ -4,7 +4,7 @@
 #include <string.h>
 
 // Initialise une nouvelle partie
-void initializeGame(AwaleGame* game) {
+void initializeGame(AwaleGame* game, const char* player1Name, const char* player2Name) {
     // Initialiser le plateau
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < HOUSES; j++) {
@@ -19,6 +19,8 @@ void initializeGame(AwaleGame* game) {
     game->gameOver = false;
     game->lastMove = -1;
     game->winner = -1;
+    strcpy(game->playerNames[0], player1Name);
+    strcpy(game->playerNames[1], player2Name);
     strcpy(game->message, "Game started");
 }
 
@@ -166,7 +168,7 @@ bool makeMove(AwaleGame* game, int house) {
 // Fonction pour convertir l'état du jeu en chaîne de caractères pour le réseau
 void serializeGame(const AwaleGame* game, char* buffer, size_t bufferSize) {
     snprintf (buffer, bufferSize,
-        "game:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%s",
+        "game:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%s,%s,%s",
         game->board[0][0], game->board[0][1], game->board[0][2],
         game->board[0][3], game->board[0][4], game->board[0][5],
         game->board[1][0], game->board[1][1], game->board[1][2],
@@ -174,7 +176,8 @@ void serializeGame(const AwaleGame* game, char* buffer, size_t bufferSize) {
         game->score[0], game->score[1],
         game->currentPlayer, game->gameOver,
         game->lastMove, game->winner,
-        strlen(game->message), game->message);
+        strlen(game->message), game->message, 
+        game->playerNames[0], game->playerNames[1]);
 }
 
 // Fonction pour reconstituer l'état du jeu à partir d'une chaîne de caractères
@@ -183,7 +186,7 @@ void deserializeGame(AwaleGame* game, const char* buffer) {
     int messageLen;
     int tempGameOver; // Variable temporaire pour stocker la valeur booléenne
 
-    sscanf(buffer, "%5[^:]:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%[^\n]",
+    sscanf(buffer, "%5[^:]:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%[^,],%[^,],%[^\n]",
         prefix,
         &game->board[0][0], &game->board[0][1], &game->board[0][2],
         &game->board[0][3], &game->board[0][4], &game->board[0][5],
@@ -192,28 +195,59 @@ void deserializeGame(AwaleGame* game, const char* buffer) {
         &game->score[0], &game->score[1],
         &game->currentPlayer, &tempGameOver,  // Utiliser la variable temporaire
         &game->lastMove, &game->winner,
-        &messageLen, game->message);
+        &messageLen, game->message, 
+        game->playerNames[0], game->playerNames[1]);
 
     game->gameOver = (tempGameOver != 0); // Convertir l'entier en booléen
 }
 // Fonction d'affichage
-void printGame(const AwaleGame* game) {
-    printf("\nOpponent: ");
-    for (int i = HOUSES - 1; i >= 0; i--) {
-        printf("%2d ", game->board[1 - game->currentPlayer][i]);
+void printGame(const AwaleGame* game, char* playerName) {
+    int currentPlayer;
+    printf("\nName given in funtion%s \n: ", playerName);
+    printf("\nFirst Name in game%s \n Second Name in game %s\n: ", game->playerNames[0], game->playerNames[1]);
+    if(strcmp(playerName, game->playerNames[0]) == 0){
+        currentPlayer = 0;
+    } else {
+        currentPlayer = 1;
     }
-    printf(" | Score: %d", game->score[1 - game->currentPlayer]);
+    printf("Joueur actuel: %d\n", currentPlayer);
+
+    printf("\n%s: ", game->playerNames[1 - currentPlayer]);
+    for (int i = HOUSES - 1; i >= 0; i--) {
+        printf("%2d ", game->board[currentPlayer][i]);
+    }
+    printf(" | Score: %d", game->score[currentPlayer]);
     printf("\n         ");
     for (int i = 0; i < HOUSES; i++) {
         printf("   ");
     }
-    printf("\nYou: ");
+    printf("\n%s: ", game->playerNames[currentPlayer]);
     for (int i = 0; i < HOUSES; i++) {
-        printf("%2d ", game->board[game->currentPlayer][i]);
+        printf("%2d ", game->board[1 - currentPlayer][i]);
     }
-    printf(" | Score: %d", game->score[game->currentPlayer]);
+    printf(" | Score: %d", game->score[1 - currentPlayer]);
     printf("\nMessage: %s\n", game->message);
 }
+
+// Fonction d'affichage Viewer
+void printGameViewer(const AwaleGame* game) {
+    printf("\n%s: ", game->playerNames[1]);
+    for (int i = HOUSES - 1; i >= 0; i--) {
+        printf("%2d ", game->board[1][i]);
+    }
+    printf(" | Score: %d", game->score[1]);
+    printf("\n         ");
+    for (int i = 0; i < HOUSES; i++) {
+        printf("   ");
+    }
+    printf("\n%s: ", game->playerNames[0]);
+    for (int i = 0; i < HOUSES; i++) {
+        printf("%2d ", game->board[0][i]);
+    }
+    printf(" | Score: %d", game->score[0]);
+    printf("\nMessage: %s\n", game->message);
+}
+
 
 // Fonction principale
 /*int main() {

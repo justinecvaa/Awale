@@ -87,7 +87,7 @@ static void app(const char *address, const char *name)
          if (strncmp(buffer, "game:", 5) == 0) // Par exemple, vérifier si le buffer commence par "game:"
          {
             deserializeGame(&game, buffer); // Afficher le jeu
-            printGame(&game);
+            printGame(&game, name);
          }
          else
          {

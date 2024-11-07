@@ -12,6 +12,7 @@
 typedef struct {
     int board[2][HOUSES];    // Plateau de jeu
     int score[2];            // Scores des joueurs
+    char playerNames[2][50];    // Noms des joueurs
     int currentPlayer;       // Joueur actuel (0 ou 1)
     bool gameOver;           // État de fin de partie
     char message[256];       // Message pour la communication client-serveur
@@ -24,13 +25,26 @@ typedef struct {
  * Initialise une nouvelle partie
  * @param game Pointeur vers la structure du jeu à initialiser
  */
-void initializeGame(AwaleGame* game);
+void initializeGame(AwaleGame* game, const char* player1Name, const char* player2Name);
 
 /**
  * Vérifie si la partie est terminée
  * @param game Pointeur vers la structure du jeu
  */
 void checkGameOver(AwaleGame* game);
+
+/**
+ * @brief Verifies if a move is valid in the given game state.
+ *
+ * This function checks if a move from the source position to the destination position
+ * is valid according to the rules of the game. It takes into account the current state
+ * of the game board, the positions of the pieces, and the rules governing piece movement.
+ *
+ * @param game Pointeur vers la structure du jeu
+ * @param house Index de la maison choisie (0 à HOUSES-1)
+ * @return true if the move is valid, false otherwise.
+ */
+bool verifyMove(AwaleGame* game, int house);
 
 /**
  * Effectue un coup
@@ -56,9 +70,16 @@ void serializeGame(const AwaleGame* game, char* buffer, size_t bufferSize);
 void deserializeGame(AwaleGame* game, const char* buffer);
 
 /**
- * Affiche l'état actuel du jeu
+ * Affiche l'état actuel du jeu pour les joueurs
+ * @param game Pointeur vers la structure du jeu
+ * @param playerName Nom du joueur qui affiche
+ */
+void printGame(const AwaleGame* game, char* playerName);
+
+/**
+ * Affiche l'état actuel du jeu pour le viewer
  * @param game Pointeur vers la structure du jeu
  */
-void printGame(const AwaleGame* game);
+void printGameViewer(const AwaleGame* game);
 
 #endif // AWALE_H

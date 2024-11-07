@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "saveName": "you",
+    "timestamp": 1730970359,
+    "player1": "am",
+    "player2": "af"
+  },
+  "gameState": {
+    "board": [
+      [6, 0, 0, 2, 0, 8],
+      [1, 9, 7, 6, 0, 7]
+    ],
+    "scores": [2, 0],
+    "currentPlayer": 1,
+    "gameOver": false,
+    "lastMove": 4,
+    "winner": -1
+  }
+}
