@@ -83,7 +83,10 @@ static void app(const char *address, const char *name)
             printf("Server disconnected !\n");
             break;
          }
-         printf("Received: %s\n", buffer);
+         fflush(stdout);
+//          printf("Longueur du buffer : %zu\n", strlen(buffer));
+// printf("Premiers caractères : %.10s\n", buffer);
+//          printf("Received: %s\n", buffer);
          // Appel de deserializeGameBuffer si le buffer est un buffer de jeu
          if (strncmp(buffer, "game:", 5) == 0) // Par exemple, vérifier si le buffer commence par "game:"
          {

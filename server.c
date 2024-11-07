@@ -151,6 +151,7 @@ static void app(void)
                                         write_client(client.sock, "Challenge accepted. Starting game...\n");
                                         write_client(clients[j].sock, "Challenge accepted. Starting game...\n");
                                         // Start the game logic here
+                                        sleep(1); // Wait for the clients to receive the message
                                         AwaleGame game;
                                         initializeGame(&game);
                                         char serializedGameBuffer[BUF_SIZE];
