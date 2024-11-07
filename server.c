@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <time.h>
 
 #include "server.h"
 #include "client2.h"
 #include "awale.h"
 #include <sys/select.h>
+
 
 static void init(void)
 {
@@ -152,14 +154,158 @@ static void app(void)
                                         write_client(clients[j].sock, "Challenge accepted. Starting game...\n");
                                         // Start the game logic here
                                         sleep(1); // Wait for the clients to receive the message
+                                        int player = rand() % 2; // Randomly choose the starting player
+
                                         AwaleGame game;
                                         initializeGame(&game);
                                         char serializedGameBuffer[BUF_SIZE];
                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
                                         //printf("%s", serializedGameBuffer);
-                                        write_client(client.sock, serializedGameBuffer);
-                                        write_client(clients[j].sock, serializedGameBuffer);
-                                        printGame(&game);
+                                        if (player == 0) // Send the game state to the first player
+                                        {
+                                          write_client(client.sock, serializedGameBuffer);
+                                          write_client(clients[j].sock, serializedGameBuffer);
+                                          sleep(1); // Wait for the clients to receive the message
+                                          write_client(clients[j].sock, "waiting for opponent...\n");
+                                            while (!game.gameOver)
+                                            {
+                                                printGame(&game);
+                                                // Receive the move from the first player
+                                                c = read_client(client.sock, buffer);
+                                                buffer[c] = '\0'; // Ensure null termination
+                                                int house = atoi(buffer);
+
+                                                if (house >= 1 && house <= HOUSES) {
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(client.sock, "waiting for opponent...\n");
+                                                   }
+                                                } else {
+                                                   while (house < 1 || house > HOUSES) {
+                                                      write_client(client.sock, "Invalid input. Please enter a number between 1 and 6 or 'save'.\n");
+                                                      c = read_client(client.sock, buffer);
+                                                      buffer[c] = '\0'; // Ensure null termination
+                                                      house = atoi(buffer);
+                                                   }
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(client.sock, "waiting for opponent...\n");
+                                                   }
+                                                }
+
+                                                // Receive the move from the second player
+                                                c = read_client(clients[j].sock, buffer);
+                                                buffer[c] = '\0'; // Ensure null termination
+                                                house = atoi(buffer);
+
+                                                if (house >= 1 && house <= HOUSES) {
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(clients[j].sock, "waiting for opponent...\n");
+                                                   }
+                                                } else {
+                                                   while (house < 1 || house > HOUSES) {
+                                                      write_client(clients[j].sock, "Invalid input. Please enter a number between 1 and 6 or 'save'.\n");
+                                                      c = read_client(clients[j].sock, buffer);
+                                                      buffer[c] = '\0'; // Ensure null termination
+                                                      house = atoi(buffer);
+                                                   }
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(clients[j].sock, "waiting for opponent...\n");
+                                                   }
+                                                }
+                                            }
+
+                                        }
+                                        else // Send the game state to the second player
+                                        {
+                                          write_client(clients[j].sock, serializedGameBuffer);
+                                          write_client(client.sock, serializedGameBuffer);
+                                          sleep(1); // Wait for the clients to receive the message
+                                          write_client(client.sock, "waiting for opponent...\n");
+                                            while (!game.gameOver)
+                                            {
+                                                printGame(&game);
+                                                // Receive the move from the first player
+                                                c = read_client(clients[j].sock, buffer);
+                                                buffer[c] = '\0'; // Ensure null termination
+                                                int house = atoi(buffer);
+
+                                                if (house >= 1 && house <= HOUSES) {
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(clients[j].sock, "waiting for opponent...\n");
+                                                   }
+                                                } else {
+                                                   while (house < 1 || house > HOUSES) {
+                                                      write_client(clients[j].sock, "Invalid input. Please enter a number between 1 and 6 or 'save'.\n");
+                                                      c = read_client(clients[j].sock, buffer);
+                                                      buffer[c] = '\0'; // Ensure null termination
+                                                      house = atoi(buffer);
+                                                   }
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(clients[j].sock, "waiting for opponent...\n");
+                                                   }
+                                                }
+
+                                                // Receive the move from the second player
+                                                c = read_client(client.sock, buffer);
+                                                buffer[c] = '\0'; // Ensure null termination
+                                                house = atoi(buffer);
+
+                                                if (house >= 1 && house <= HOUSES) {
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(client.sock, "waiting for opponent...\n");
+                                                   }
+                                                } else {
+                                                   while (house < 1 || house > HOUSES) {
+                                                      write_client(client.sock, "Invalid input. Please enter a number between 1 and 6 or 'save'.\n");
+                                                      c = read_client(client.sock, buffer);
+                                                      buffer[c] = '\0'; // Ensure null termination
+                                                      house = atoi(buffer);
+                                                   }
+                                                   if (makeMove(&game, house - 1)) {
+                                                         // Sérialisation normale pour le réseau
+                                                         serializeGame(&game, serializedGameBuffer, sizeof(serializedGameBuffer));
+                                                         write_client(client.sock, serializedGameBuffer);
+                                                         write_client(clients[j].sock, serializedGameBuffer);
+                                                         sleep(1); // Wait for the clients to receive the message
+                                                         write_client(client.sock, "waiting for opponent...\n");
+                                                   }
+                                                }
+                                            }
+                                        }   
                                     }
                                     else
                                     {
@@ -184,6 +330,8 @@ static void app(void)
    clear_clients(clients, actual);
    end_connection(sock);
 }
+
+
 
 static void clear_clients(Client *clients, int actual)
 {
