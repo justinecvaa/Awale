@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/select.h>
+#include <stdint.h> 
 
 #include "client1.h"
 #include "awale.h"
@@ -30,10 +31,9 @@ static void end(void)
 static void app(const char *address, const char *name)
 {
    SOCKET sock = init_connection(address);
-   char buffer[BUF_SIZE];
+   struct message msg;  // Changé de buffer à message
 
    fd_set rdfs;
-
    AwaleGame game;
 
    /* send our name */
@@ -42,11 +42,7 @@ static void app(const char *address, const char *name)
    while(1)
    {
       FD_ZERO(&rdfs);
-
-      /* add STDIN_FILENO */
       FD_SET(STDIN_FILENO, &rdfs);
-
-      /* add the socket */
       FD_SET(sock, &rdfs);
 
       if(select(sock + 1, &rdfs, NULL, NULL, NULL) == -1)
@@ -58,40 +54,36 @@ static void app(const char *address, const char *name)
       /* something from standard input : i.e keyboard */
       if(FD_ISSET(STDIN_FILENO, &rdfs))
       {
-         fgets(buffer, BUF_SIZE - 1, stdin);
+         fgets(msg.content, BUF_SIZE - 1, stdin);  // Utiliser msg.content au lieu de buffer
+         char *p = strstr(msg.content, "\n");
+         if(p != NULL)
          {
-            char *p = NULL;
-            p = strstr(buffer, "\n");
-            if(p != NULL)
-            {
-               *p = 0;
-            }
-            else
-            {
-               /* fclean */
-               buffer[BUF_SIZE - 1] = 0;
-            }
+            *p = 0;
          }
-         write_server(sock, buffer);
+         else
+         {
+            msg.content[BUF_SIZE - 1] = 0;
+         }
+         write_server(sock, msg.content);  // Passer msg.content
       }
       else if(FD_ISSET(sock, &rdfs))
       {
-         int n = read_server(sock, buffer);
+         int n = read_server(sock, &msg);  // Passer l'adresse de msg
          /* server down */
          if(n == 0)
          {
             printf("Server disconnected !\n");
             break;
          }
-         // Appel de deserializeGameBuffer si le buffer est un buffer de jeu
-         if (strncmp(buffer, "game:", 5) == 0) // Par exemple, vérifier si le buffer commence par "game:"
+         // Vérifier le contenu du message
+         if (strncmp(msg.content, "game:", 5) == 0)
          {
-            deserializeGame(&game, buffer); // Afficher le jeu
+            deserializeGame(&game, msg.content);
             printGame(&game, name);
          }
          else
          {
-            puts(buffer); // Afficher le message normal
+            puts(msg.content);
          }
       }
    }
@@ -136,28 +128,65 @@ static void end_connection(int sock)
    closesocket(sock);
 }
 
-static int read_server(SOCKET sock, char *buffer)
+static int read_server(SOCKET sock, struct message *msg)
 {
-   int n = 0;
+    // Lire d'abord la taille
+    int size_read = recv(sock, &msg->size, sizeof(uint32_t), 0);
+    if (size_read != sizeof(uint32_t)) {
+        perror("recv() size");
+        return -1;
+    }
 
-   if((n = recv(sock, buffer, BUF_SIZE - 1, 0)) < 0)
-   {
-      perror("recv()");
-      exit(errno);
-   }
+    // Vérifier que la taille est valide
+    if (msg->size >= BUF_SIZE) {
+        fprintf(stderr, "Message trop grand: %u bytes\n", msg->size);
+        return -1;
+    }
 
-   buffer[n] = 0;
+    // Lire ensuite exactement le nombre d'octets indiqué
+    int content_read = 0;
+    int remaining = msg->size;
 
-   return n;
+    while (remaining > 0) {
+        int n = recv(sock, msg->content + content_read, remaining, 0);
+        if (n <= 0) {
+            perror("recv() content");
+            return -1;
+        }
+        content_read += n;
+        remaining -= n;
+    }
+
+    // Ajouter le caractère nul de fin
+    msg->content[msg->size] = 0;
+
+    // Retourner le nombre total d'octets lus (taille + contenu)
+    return size_read + content_read;
 }
 
 static void write_server(SOCKET sock, const char *buffer)
 {
-   if(send(sock, buffer, strlen(buffer), 0) < 0)
-   {
-      perror("send()");
-      exit(errno);
-   }
+    struct message msg;
+    msg.size = strlen(buffer);
+    if (msg.size >= BUF_SIZE) {
+        fprintf(stderr, "Message trop grand\n");
+         return;
+    }
+    
+    strcpy(msg.content, buffer);
+    
+    // Envoyer la taille
+    if (send(sock, &msg.size, sizeof(uint32_t), 0) != sizeof(uint32_t)) {
+        perror("send() size");
+        exit(errno);
+    }
+    
+    // Envoyer le contenu
+    if (send(sock, msg.content, msg.size, 0) != msg.size) {
+        perror("send() content");
+        exit(errno);
+    }
+    
 }
 
 int main(int argc, char **argv)

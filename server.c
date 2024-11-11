@@ -11,16 +11,6 @@
 
 static GameSession gameSessions[MAX_GAME_SESSIONS];
 
-static void init(void);
-static void end(void);
-static void app(void);
-static int init_connection(void);
-static void end_connection(int sock);
-static int read_client(SOCKET sock, char *buffer);
-static void write_client(SOCKET sock, const char *buffer);
-static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server);
-static void remove_client(Client *clients, int to_remove, int *actual);
-static void clear_clients(Client *clients, int actual);
 
 static void init(void) {
 #ifdef WIN32
@@ -131,7 +121,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 
 static void app(void) {
     SOCKET sock = init_connection();
-    char buffer[BUF_SIZE];
+    struct message msg; 
     int actual = 0;
     int max = sock;
     Client clients[MAX_CLIENTS];
@@ -166,7 +156,7 @@ static void app(void) {
                 continue;
             }
 
-            if(read_client(csock, buffer) == -1) {
+            if(read_client(csock, &msg) == -1) {
                 continue;
             }
 
@@ -174,16 +164,15 @@ static void app(void) {
             max = csock > max ? csock : max;
 
             Client c = {csock};
-            strncpy(c.name, buffer, BUF_SIZE - 1);
+            strncpy(c.name, msg.content, BUF_SIZE - 1);
             clients[actual] = c;
             actual++;
         }
-        else { // TODO : changer les messages pour rajouter un séparateur, et adapter le client
-               // Utile pour séparer les data du jeu des messages
+        else { 
             for(int i = 0; i < actual; i++) {
                 if(FD_ISSET(clients[i].sock, &rdfs)) {
                     Client* client = &clients[i];
-                    int c = read_client(client->sock, buffer);
+                    int c = read_client(client->sock, &msg);
                     
                     if(c == 0) {
                         // Déconnexion du client
@@ -202,7 +191,7 @@ static void app(void) {
                         continue;
                     }
 
-                    if(strcmp(buffer, "list") == 0) {
+                    if(strcmp(msg.content, "list") == 0) {
                         char client_list[BUF_SIZE] = "Connected clients:\n";
                         for(int j = 0; j < actual; j++) {
                             strncat(client_list, clients[j].name, BUF_SIZE - strlen(client_list) - 1);
@@ -210,8 +199,8 @@ static void app(void) {
                         }
                         write_client(client->sock, client_list);
                     }
-                    else if(strncmp(buffer, "challenge ", 10) == 0) { // TODO : Changer cela pour que ça ne soit plus bloquant
-                        char *challenged_name = buffer + 10;
+                    else if(strncmp(msg.content, "challenge ", 10) == 0) { // TODO : Changer cela pour que ça ne soit plus bloquant
+                        char *challenged_name = msg.content + 10;
                         challenged_name[strcspn(challenged_name, "\n")] = 0;
 
                         for(int j = 0; j < actual; j++) {
@@ -220,10 +209,10 @@ static void app(void) {
                                 write_client(clients[j].sock, client->name);
                                 write_client(clients[j].sock, ". Do you accept? (yes/no)\n");
 
-                                c = read_client(clients[j].sock, buffer);
-                                buffer[c] = '\0';
+                                c = read_client(clients[j].sock, &msg);
+                                //buffer[c] = '\0';
                                 
-                                if(strcmp(buffer, "yes") == 0) {
+                                if(strcmp(msg.content, "yes") == 0) {
                                     int sessionId = createGameSession(client, &clients[j]);
                                     if(sessionId != -1) {
                                         GameSession* session = &gameSessions[sessionId];
@@ -256,10 +245,10 @@ static void app(void) {
                         // Vérifier si le client est dans une partie
                         int gameSession = findClientGameSession(client);
                         if(gameSession != -1) {
-                            handleGameMove(gameSession, client, buffer);
+                            handleGameMove(gameSession, client, msg.content);
                         }
                         else {
-                            send_message_to_all_clients(clients, *client, actual, buffer, 0);
+                            send_message_to_all_clients(clients, *client, actual, msg.content, 0);
                         }
                     }
                 }
@@ -340,22 +329,65 @@ static void end_connection(int sock) {
     closesocket(sock);
 }
 
-static int read_client(SOCKET sock, char *buffer) {
-    int n = 0;
-
-    if((n = recv(sock, buffer, BUF_SIZE - 1, 0)) < 0) {
-        perror("recv()");
-        n = 0;
+static int read_client(SOCKET sock, struct message *msg)
+{
+    // Lire d'abord la taille
+    int size_read = recv(sock, &msg->size, sizeof(uint32_t), 0);
+    if (size_read != sizeof(uint32_t)) {
+        if (size_read == 0) return 0;  // Connexion fermée
+        perror("recv() size");
+        return -1;
     }
 
-    buffer[n] = 0;
-    return n;
+    // Vérifier que la taille est valide
+    if (msg->size >= BUF_SIZE) {
+        fprintf(stderr, "Message trop grand: %u bytes\n", msg->size);
+        return -1;
+    }
+
+    // Lire ensuite exactement le nombre d'octets indiqué
+    int content_read = 0;
+    int remaining = msg->size;
+
+    while (remaining > 0) {
+        int n = recv(sock, msg->content + content_read, remaining, 0);
+        if (n <= 0) {
+            if (n == 0) return 0;  // Connexion fermée
+            perror("recv() content");
+            return -1;
+        }
+        content_read += n;
+        remaining -= n;
+    }
+
+    // Ajouter le caractère nul de fin
+    msg->content[msg->size] = 0;
+
+    return content_read;
 }
 
-static void write_client(SOCKET sock, const char *buffer) {
-    if(send(sock, buffer, strlen(buffer), 0) < 0) {
-        perror("send()");
-        exit(errno);
+static void write_client(SOCKET sock, const char *buffer)
+{
+    struct message msg;
+    msg.size = strlen(buffer);
+    
+    if (msg.size >= BUF_SIZE) {
+        fprintf(stderr, "Message trop grand\n");
+        return;
+    }
+    
+    strcpy(msg.content, buffer);
+    
+    // Envoyer la taille
+    if (send(sock, &msg.size, sizeof(uint32_t), 0) != sizeof(uint32_t)) {
+        perror("send() size");
+        return;
+    }
+    
+    // Envoyer le contenu
+    if (send(sock, msg.content, msg.size, 0) != msg.size) {
+        perror("send() content");
+        return;
     }
 }
 

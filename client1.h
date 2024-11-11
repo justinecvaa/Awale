@@ -27,17 +27,19 @@ typedef struct in_addr IN_ADDR;
 
 #endif
 
+#include "message.h"
+
 #define CRLF     "\r\n"
 #define PORT     1977
 
-#define BUF_SIZE 1024
+
 
 static void init(void);
 static void end(void);
 static void app(const char *address, const char *name);
 static int init_connection(const char *address);
 static void end_connection(int sock);
-static int read_server(SOCKET sock, char *buffer);
+static int read_server(SOCKET sock, struct message *msg);
 static void write_server(SOCKET sock, const char *buffer);
 
 #endif /* guard */

@@ -28,12 +28,14 @@
 #include <time.h>
 #include "client2.h"
 #include "awale.h"
+#include "message.h"
 
 #define CRLF        "\r\n"
 #define PORT        1977
 #define MAX_CLIENTS 100
-#define BUF_SIZE    1024
 #define MAX_GAME_SESSIONS 50
+
+
 
 
 // Structure pour gérer l'état d'une partie en cours
@@ -53,7 +55,7 @@ static void end(void);
 static void app(void);
 static int init_connection(void);
 static void end_connection(int sock);
-static int read_client(SOCKET sock, char *buffer);
+static int read_client(SOCKET sock, struct message *msg);
 static void write_client(SOCKET sock, const char *buffer);
 static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server);
 static void remove_client(Client *clients, int to_remove, int *actual);
