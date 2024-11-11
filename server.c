@@ -269,10 +269,15 @@ static void app(void)
                                  }
                               }
                            }
-                           else
+                           else if (strcmp(buffer, "no") == 0)
                            {
                               write_client(client.sock, "Challenge declined.\n");
                               write_client(clients[j].sock, "Challenge declined.\n");
+                           }
+                           else
+                           {
+                              write_client(client.sock, "Invalid response. Challenge declined.\n");
+                              write_client(clients[j].sock, "Invalid response. Challenge declined.\n");
                            }
                            break; // Exit the for loop after processing the challenge
                         }
