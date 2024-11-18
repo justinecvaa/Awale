@@ -205,9 +205,9 @@ static void app(void) {
 
                         for(int j = 0; j < actual; j++) {
                             if(strcmp(clients[j].name, challenged_name) == 0) {
-                                write_client(clients[j].sock, "You have been challenged by ");
-                                write_client(clients[j].sock, client->name);
-                                write_client(clients[j].sock, ". Do you accept? (yes/no)\n");
+                                char message[BUF_SIZE];
+                                snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (yes/no)\n", client->name);
+                                write_client(clients[j].sock, message);
 
                                 c = read_client(clients[j].sock, &msg);
                                 //buffer[c] = '\0';
@@ -241,14 +241,43 @@ static void app(void) {
                             }
                         }
                     }
-                    else { // TODO : ajouter une fonction pour gérer les messages privés
+                    else { 
                         // Vérifier si le client est dans une partie
                         int gameSession = findClientGameSession(client);
                         if(gameSession != -1) {
                             handleGameMove(gameSession, client, msg.content);
                         }
                         else {
-                            send_message_to_all_clients(clients, *client, actual, msg.content, 0);
+                            // Vérification si c'est un message privé
+                            if(strncmp(msg.content, "private ", 8) == 0) {
+                                // Extraire le destinataire et le message
+                                char *message_start = msg.content + 8;
+                                char *dest_name = strtok(message_start, " ");
+                                char *private_message = strtok(NULL, "");
+
+                                if (dest_name && private_message) {
+                                    int found = 0;
+                                    for (int j = 0; j < actual; j++) {
+                                        if (strcmp(clients[j].name, dest_name) == 0) {
+                                            // Créer le message privé et l'envoyer sur une seule ligne
+                                            char message[BUF_SIZE];
+                                            snprintf(message, sizeof(message), "[Private] %s: %s", client->name, private_message);
+                                            
+                                            write_client(clients[j].sock, message);
+                                            found = 1;
+                                            break;
+                                        }
+                                    }
+                                    if (!found) {
+                                        write_client(client->sock, "Client not found.\n");
+                                    }
+                                } else {
+                                    write_client(client->sock, "Usage: private <client_name> <message>\n");
+                                }
+                            } else {
+                                // Si ce n'est pas un message privé, on l'envoie à tous les clients
+                                send_message_to_all_clients(clients, *client, actual, msg.content, 0);
+                            }
                         }
                     }
                 }
