@@ -203,14 +203,14 @@ void deserializeGame(AwaleGame* game, const char* buffer) {
 // Fonction d'affichage
 void printGame(const AwaleGame* game, char* playerName) {
     int currentPlayer;
-    printf("\nName given in funtion%s \n: ", playerName);
-    printf("\nFirst Name in game%s \n Second Name in game %s\n: ", game->playerNames[0], game->playerNames[1]);
+    //printf("\nName given in funtion%s \n: ", playerName);
+    //printf("\nFirst Name in game%s \n Second Name in game %s\n: ", game->playerNames[0], game->playerNames[1]);
     if(strcmp(playerName, game->playerNames[0]) == 0){
         currentPlayer = 0;
     } else {
         currentPlayer = 1;
     }
-    printf("Joueur actuel: %d\n", currentPlayer);
+    //printf("Joueur actuel: %d\n", currentPlayer);
 
     printf("\n%s: ", game->playerNames[1 - currentPlayer]);
     for (int i = HOUSES - 1; i >= 0; i--) {

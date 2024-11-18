@@ -204,7 +204,7 @@ static void app(void) {
                         challenged_name[strcspn(challenged_name, "\n")] = 0;
 
                         for(int j = 0; j < actual; j++) {
-                            if(strcmp(clients[j].name, challenged_name) == 0) {
+                            if(strcmp(clients[j].name, challenged_name) == 0 && findClientGameSession(&clients[j]) == -1) {
                                 char message[BUF_SIZE];
                                 snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (yes/no)\n", client->name);
                                 write_client(clients[j].sock, message);
@@ -238,6 +238,9 @@ static void app(void) {
                                     write_client(clients[j].sock, "Challenge declined.\n");
                                 }
                                 break;
+                            }
+                            else if (findClientGameSession(&clients[j]) != -1) {
+                                write_client(client->sock, "Client is already in a game.\n");
                             }
                         }
                     }
