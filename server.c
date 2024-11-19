@@ -8,7 +8,7 @@
 #include "awale.h"
 #include <sys/select.h>
 
-
+static ServerContext* context;
 static GameSession gameSessions[MAX_GAME_SESSIONS];
 
 
@@ -39,13 +39,50 @@ static int isNameTaken(const char* name, Client* clients, int actual) {
     return 0;  // Nom disponible
 }
 
+// Initialize server context
+void initServerContext(SOCKET serverSocket) {
+    context->serverSocket = serverSocket;
+    context->actualClients = 0;
+    context->maxSocket = 0;
+    context->lastCleanupTime = time(NULL);
+    context->isRunning = true;
+    
+    // Initialize game sessions
+    initGameSessions();
+}
+
+void closeServer() {
+    // Notify all clients of server shutdown
+    for (int i = 0; i < context->actualClients; i++) {
+        write_client(context->clients[i].sock, "Server is shutting down...\n");
+    }
+    
+    // Close server socket first
+    if (context->serverSocket != INVALID_SOCKET) {
+        closesocket(context->serverSocket);
+        context->serverSocket = INVALID_SOCKET;
+    }
+    
+    // Give clients a moment to receive shutdown message
+    sleep(1);
+    
+    // Then close client connections
+    for (int i = 0; i < context->actualClients; i++) {
+        closesocket(context->clients[i].sock);
+    }
+    
+    context->isRunning = false;
+}
+
+
 // Initialisation des sessions de jeu
 static void initGameSessions(void) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
-        gameSessions[i].isActive = 0;
-        gameSessions[i].player1 = NULL;
-        gameSessions[i].player2 = NULL;
-        gameSessions[i].waitingForMove = 0;
+        context->gameSessions[i].isActive = 0;
+        context->gameSessions[i].player1 = NULL;
+        context->gameSessions[i].player2 = NULL;
+        context->gameSessions[i].spectatorCount = 0;
+        context->gameSessions[i].waitingForMove = 0;
     }
 }
 
@@ -189,6 +226,7 @@ static void removeSpectatorFromGame(int sessionId, Client* spectator) {
 
 static void app(void) {
     SOCKET sock = init_connection();
+    initServerContext(sock);
     struct message msg; 
     int actual = 0;
     int max = sock;

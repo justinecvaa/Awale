@@ -51,6 +51,18 @@ typedef struct {
     time_t lastActivity;     // Pour gérer le timeout
 } GameSession;
 
+// New type definitions
+typedef struct {
+    SOCKET serverSocket;
+    Client clients[MAX_CLIENTS];
+    int actualClients;
+    GameSession gameSessions[MAX_GAME_SESSIONS];
+    fd_set readfs;
+    int maxSocket;
+    time_t lastCleanupTime;
+    bool isRunning;
+} ServerContext;
+
 // Function declarations
 static void init(void);
 static void end(void);
