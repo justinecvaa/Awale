@@ -10,6 +10,8 @@
 
 static ServerContext* context;
 
+//TODO : finish changing functions to use the new context
+
 // ************************************************************************************************
 // Game related Functions
 // ************************************************************************************************
@@ -380,6 +382,51 @@ static int addSpectatorToGame(int sessionId, Client* spectator) {
     return 0;  // Pas d'espace pour plus de spectateurs
 }
 
+static void handleBiography(Client* client, const char* message) {
+    if (strncmp(message, "write", 5) == 0) {
+        strncpy(client->biography, message + 6, BUF_SIZE - 1);
+        write_client(client->sock, "Biography updated.\n");
+    } else if (strncmp(message, "read", 4) == 0) {
+
+
+
+
+
+
+        message += 4;
+        if (strlen(message) == 0) {
+            write_client(client->sock, "Your biography:\n");
+            write_client(client->sock, client->biography);
+        } else {
+            message++;  // Sauter l'espace
+            char * clientName = strtok(strdup(message), "\n");
+            char * response;
+            for (int i = 0; i < context->actualClients; i++) {
+                if (strcmp(context->clients[i].name, message) == 0) {
+                    response = "Biography of ";
+                    strncat(response, clientName, BUF_SIZE - strlen(response) - 1);
+                    strncat(response, ":\n", BUF_SIZE - strlen(response) - 1);
+                    strncat(response, context->clients[i].biography, BUF_SIZE - strlen(response) - 1);
+                    write_client(client->sock, response);
+                    return;
+                }
+            }
+            write_client(client->sock, "Client not found.\n");
+        }
+    }
+    // TODO : Implement biography
+    write_client(client->sock, "Biography not implemented yet.\n");
+}
+
+static int isNameTaken(const char* name) {
+    for(int i = 0; i < context->actualClients; i++) {
+        if(strcmp(context->clients[i].name, name) == 0) {
+            return 1;  // Nom déjà pris
+        }
+    }
+    return 0;  // Nom disponible
+}
+
 static void handleNewConnection(){
     struct message msg;
     SOCKADDR_IN csin = {0};
@@ -401,7 +448,7 @@ static void handleNewConnection(){
     strncpy(c.name, msg.content, BUF_SIZE - 1);
 
         // Vérification du nom
-    if(isNameTaken(c.name, context->clients, context->actualClients)) {
+    if(isNameTaken(c.name)) {
         write_client(c.sock, "Name already taken. Please choose another name:\n");
         // Lire un nouveau nom du client
         if(read_client(c.sock, &msg) == -1) {   //TODO : faire en sorte que ça ne soit pas bloquant
@@ -443,7 +490,7 @@ void processClientMessage(Client* client, const char* message) {
         }
     }
     else if(strncmp(message, "biography", 9) == 0) {
-        write_client(client->sock, "Biography not implemented yet.\n");
+        handleBiography(client, message + 10);
         //TODO : implement biography : read others and write your own
     }
     else if(strncmp(message, "friend", 6) == 0) {
