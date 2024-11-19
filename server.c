@@ -409,6 +409,9 @@ static void handleBiography(Client* client, const char* message) {
                     strncat(response, context->clients[i].biography, BUF_SIZE - strlen(response) - 1);
                     write_client(client->sock, response);
                     return;
+                    //TODO : deviner pourquoi ça marche pas mais read soi meme marche
+                    // Ya a peu pres le meme bug a d'autres endroits donc go corriger la bas aussi
+                
                 }
             }
             write_client(client->sock, "Client not found.\n");
