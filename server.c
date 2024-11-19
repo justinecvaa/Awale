@@ -70,6 +70,22 @@ static int findClientGameSession(Client* client) {
     return -1;
 }
 
+// Trouver la session de jeu d'un spectateur
+static int findSpectatorGameSession(Client* spectator) {
+    for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
+        if(gameSessions[i].isActive) {
+            for(int j = 0; j < gameSessions[i].spectatorCount; j++) {
+                if(gameSessions[i].spectators[j] == spectator) {
+                    return i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+
+
 // Créer une nouvelle partie
 static int createGameSession(Client* player1, Client* player2) {
     int sessionId = findFreeGameSession();
@@ -122,6 +138,11 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         // Envoyer l'état du jeu aux deux joueurs
         write_client(session->player1->sock, serializedGame);
         write_client(session->player2->sock, serializedGame);
+
+        // Envoyer aux spectateurs
+        for (int i = 0; i < session->spectatorCount; i++) {
+            write_client(session->spectators[i]->sock, serializedGame);
+        }
         
         // Changer de joueur
         session->currentPlayerIndex = 1 - session->currentPlayerIndex;
@@ -138,6 +159,34 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         }
     }
 }
+
+
+
+// Ajouter un spectateur à une session de jeu
+static int addSpectatorToGame(int sessionId, Client* spectator) {
+    GameSession* session = &gameSessions[sessionId];
+    if (session->spectatorCount < MAX_SPECTATORS) {
+        session->spectators[session->spectatorCount++] = spectator;
+        return 1;  // Ajout réussi
+    }
+    return 0;  // Pas d'espace pour plus de spectateurs
+}
+
+// Supprimer un spectateur de la session de jeu
+static void removeSpectatorFromGame(int sessionId, Client* spectator) {
+    GameSession* session = &gameSessions[sessionId];
+    for (int i = 0; i < session->spectatorCount; i++) {
+        if (session->spectators[i] == spectator) {
+            // Décaler les spectateurs restants
+            memmove(&session->spectators[i], &session->spectators[i + 1],
+                    (session->spectatorCount - i - 1) * sizeof(Client*));
+            session->spectatorCount--;
+            break;
+        }
+    }
+}
+
+
 
 static void app(void) {
     SOCKET sock = init_connection();
@@ -231,6 +280,18 @@ static void app(void) {
                         }
                         write_client(client->sock, client_list);
                     }
+                    else if (strcmp(msg.content, "games") == 0) {
+                        char game_list[BUF_SIZE] = "Active games:\n";
+                        for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
+                            if (gameSessions[j].isActive) {
+                                strncat(game_list, gameSessions[j].player1->name, BUF_SIZE - strlen(game_list) - 1);
+                                strncat(game_list, " vs ", BUF_SIZE - strlen(game_list) - 1);
+                                strncat(game_list, gameSessions[j].player2->name, BUF_SIZE - strlen(game_list) - 1);
+                                strncat(game_list, "\n", BUF_SIZE - strlen(game_list) - 1);
+                            }
+                        }
+                        write_client(client->sock, game_list);
+                    }
                     else if(strncmp(msg.content, "challenge ", 10) == 0) { // TODO : Changer cela pour que ça ne soit plus bloquant
                         char *challenged_name = msg.content + 10;
                         challenged_name[strcspn(challenged_name, "\n")] = 0;
@@ -310,6 +371,51 @@ static void app(void) {
                                 // Si ce n'est pas un message privé, on l'envoie à tous les clients
                                 char *message_start = msg.content + 4;
                                 send_message_to_all_clients(clients, *client, actual, message_start, 0);
+                            } else if(strncmp(msg.content, "watch ", 6) == 0) {
+                                char *watchRequest = msg.content + 6;
+                                char *player1_name = strtok(watchRequest, " ");
+                                char *player2_name = strtok(NULL, "");
+
+                                if (player1_name && player2_name) {
+                                    int gameSession = -1;
+
+                                    // Chercher une session de jeu correspondant aux deux joueurs
+                                    for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
+                                        if (gameSessions[j].isActive) {
+                                            if ((strcmp(gameSessions[j].player1->name, player1_name) == 0 && 
+                                                strcmp(gameSessions[j].player2->name, player2_name) == 0) ||
+                                                (strcmp(gameSessions[j].player1->name, player2_name) == 0 && 
+                                                strcmp(gameSessions[j].player2->name, player1_name) == 0)) {
+                                                gameSession = j;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (gameSession != -1) {
+                                        if (addSpectatorToGame(gameSession, client)) {
+                                            write_client(client->sock, "You are now watching the game.\n");
+
+                                            // Envoyer l'état actuel de la partie au spectateur
+                                            GameSession* session = &gameSessions[gameSession];
+                                            char serializedGame[BUF_SIZE];
+                                            serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+                                            write_client(client->sock, serializedGame);
+                                        } else {
+                                            write_client(client->sock, "No room for spectators in this game.\n");
+                                        }
+                                    } else {
+                                        write_client(client->sock, "No such game found between the specified players.\n");
+                                    }
+                                }
+                            } else if (strncmp(msg.content, "unwatch", 7) == 0) {
+                                int gameSession = findSpectatorGameSession(client);
+                                if (gameSession != -1) {
+                                    removeSpectatorFromGame(gameSession, client);
+                                    write_client(client->sock, "You are no longer watching the game.\n");
+                                } else {
+                                    write_client(client->sock, "You are not watching any game.\n");
+                                }
                             }
                         }
                     }

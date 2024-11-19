@@ -34,7 +34,7 @@
 #define PORT        1977
 #define MAX_CLIENTS 100
 #define MAX_GAME_SESSIONS 50
-
+#define MAX_SPECTATORS 10  // Limite du nombre de spectateurs par partie
 
 
 
@@ -43,6 +43,8 @@ typedef struct {
     int isActive;
     Client* player1;
     Client* player2;
+    Client* spectators[MAX_SPECTATORS];  // Tableau des spectateurs
+    int spectatorCount;                  // Nombre actuel de spectateurs
     AwaleGame game;
     int currentPlayerIndex;  // 0 pour player1, 1 pour player2
     int waitingForMove;      // 1 si en attente d'un coup
