@@ -10,6 +10,11 @@
 
 static ServerContext* context;
 
+// ************************************************************************************************
+// Game related Functions
+// ************************************************************************************************
+
+
 // Initialisation des sessions de jeu
 static void initGameSessions(void) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
@@ -375,7 +380,7 @@ static int addSpectatorToGame(int sessionId, Client* spectator) {
     return 0;  // Pas d'espace pour plus de spectateurs
 }
 
-handleNewConnection(){
+static void handleNewConnection(){
     struct message msg;
     SOCKADDR_IN csin = {0};
             socklen_t sinsize = sizeof csin;
@@ -457,6 +462,7 @@ void processClientMessage(Client* client, const char* message) {
     }
     }
 
+// Main application loop
 static void app(void) {
     SOCKET sock = init_connection();
     initServerContext(sock);
@@ -508,6 +514,10 @@ static void app(void) {
     free(context);
 }
 
+
+// ************************************************************************************************
+// Server related functions
+// ************************************************************************************************
 
 static int init_connection(void) {
     SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -628,6 +638,23 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
 static void remove_client(Client *clients, int to_remove, int *actual) {
     memmove(clients + to_remove, clients + to_remove + 1, (*actual - to_remove - 1) * sizeof(Client));
     (*actual)--;
+}
+
+static void init(void) {
+#ifdef WIN32
+   WSADATA wsa;
+   int err = WSAStartup(MAKEWORD(2, 2), &wsa);
+   if(err < 0) {
+      puts("WSAStartup failed !");
+      exit(EXIT_FAILURE);
+   }
+#endif
+}
+
+static void end(void) {
+#ifdef WIN32
+   WSACleanup();
+#endif
 }
 
 
