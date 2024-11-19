@@ -9,71 +9,6 @@
 #include <sys/select.h>
 
 static ServerContext* context;
-static GameSession gameSessions[MAX_GAME_SESSIONS];
-
-
-static void init(void) {
-#ifdef WIN32
-   WSADATA wsa;
-   int err = WSAStartup(MAKEWORD(2, 2), &wsa);
-   if(err < 0) {
-      puts("WSAStartup failed !");
-      exit(EXIT_FAILURE);
-   }
-#endif
-}
-
-static void end(void) {
-#ifdef WIN32
-   WSACleanup();
-#endif
-}
-
-// Vérifie si le nom est déjà pris par un autre client
-static int isNameTaken(const char* name, Client* clients, int actual) {
-    for(int i = 0; i < actual; i++) {
-        if(strcmp(clients[i].name, name) == 0) {
-            return 1;  // Nom déjà pris
-        }
-    }
-    return 0;  // Nom disponible
-}
-
-// Initialize server context
-void initServerContext(SOCKET serverSocket) {
-    context->serverSocket = serverSocket;
-    context->actualClients = 0;
-    context->maxSocket = 0;
-    context->lastCleanupTime = time(NULL);
-    context->isRunning = true;
-    
-    // Initialize game sessions
-    initGameSessions();
-}
-
-void closeServer() {
-    // Notify all clients of server shutdown
-    for (int i = 0; i < context->actualClients; i++) {
-        write_client(context->clients[i].sock, "Server is shutting down...\n");
-    }
-    
-    // Close server socket first
-    if (context->serverSocket != INVALID_SOCKET) {
-        closesocket(context->serverSocket);
-        context->serverSocket = INVALID_SOCKET;
-    }
-    
-    // Give clients a moment to receive shutdown message
-    sleep(1);
-    
-    // Then close client connections
-    for (int i = 0; i < context->actualClients; i++) {
-        closesocket(context->clients[i].sock);
-    }
-    
-    context->isRunning = false;
-}
-
 
 // Initialisation des sessions de jeu
 static void initGameSessions(void) {
@@ -86,10 +21,44 @@ static void initGameSessions(void) {
     }
 }
 
+// Fonction d'initialisation du contexte serveur
+void initServerContext(SOCKET serverSocket) {
+    context = malloc(sizeof(ServerContext));
+    context->serverSocket = serverSocket;
+    context->actualClients = 0;
+    context->maxSocket = serverSocket;
+    context->isRunning = true;
+    initGameSessions();
+}
+
+// Fonction pour envoyer la liste des clients
+void sendClientList(Client* client) {
+    char client_list[BUF_SIZE] = "Connected clients:\n";
+    for(int j = 0; j < context->actualClients; j++) {
+        strncat(client_list, context->clients[j].name, BUF_SIZE - strlen(client_list) - 1);
+        strncat(client_list, "\n", BUF_SIZE - strlen(client_list) - 1);
+    }
+    write_client(client->sock, client_list);
+}
+
+// Fonction pour envoyer la liste des parties en cours
+void sendGamesList(Client* client) {
+    char game_list[BUF_SIZE] = "Active games:\n";
+    for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
+        if (context->gameSessions[j].isActive) {
+            strncat(game_list, context->gameSessions[j].player1->name, BUF_SIZE - strlen(game_list) - 1);
+            strncat(game_list, " vs ", BUF_SIZE - strlen(game_list) - 1);
+            strncat(game_list, context->gameSessions[j].player2->name, BUF_SIZE - strlen(game_list) - 1);
+            strncat(game_list, "\n", BUF_SIZE - strlen(game_list) - 1);
+        }
+    }
+    write_client(client->sock, game_list);
+}
+
 // Trouver une session de jeu disponible
 static int findFreeGameSession(void) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
-        if(!gameSessions[i].isActive) {
+        if(!context->gameSessions[i].isActive) {
             return i;
         }
     }
@@ -99,8 +68,8 @@ static int findFreeGameSession(void) {
 // Trouver la session de jeu d'un client
 static int findClientGameSession(Client* client) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
-        if(gameSessions[i].isActive && 
-           (gameSessions[i].player1 == client || gameSessions[i].player2 == client)) {
+        if(context->gameSessions[i].isActive && 
+           (context->gameSessions[i].player1 == client || context->gameSessions[i].player2 == client)) {
             return i;
         }
     }
@@ -110,9 +79,9 @@ static int findClientGameSession(Client* client) {
 // Trouver la session de jeu d'un spectateur
 static int findSpectatorGameSession(Client* spectator) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
-        if(gameSessions[i].isActive) {
-            for(int j = 0; j < gameSessions[i].spectatorCount; j++) {
-                if(gameSessions[i].spectators[j] == spectator) {
+        if(context->gameSessions[i].isActive) {
+            for(int j = 0; j < context->gameSessions[i].spectatorCount; j++) {
+                if(context->gameSessions[i].spectators[j] == spectator) {
                     return i;
                 }
             }
@@ -127,7 +96,7 @@ static int createGameSession(Client* player1, Client* player2) {
     int sessionId = findFreeGameSession();
     if(sessionId == -1) return -1;
     
-    GameSession* session = &gameSessions[sessionId];
+    GameSession* session = &context->gameSessions[sessionId];
     session->isActive = 1;
     session->player1 = player1;
     session->player2 = player2;
@@ -139,9 +108,90 @@ static int createGameSession(Client* player1, Client* player2) {
     return sessionId;
 }
 
+// Fonction pour gérer un défi
+void handleChallenge(Client* client, const char* challengedName) {    
+    for(int j = 0; j < context->actualClients; j++) {
+        if(strcmp(context->clients[j].name, challengedName) == 0) {
+            if (context->clients[j].challengedBy != -1) {
+                write_client(client->sock, "Client is already challenged by someone else. Wait a bit until they answer\n");
+                break;
+            }
+            if (context->clients[j].inGameOpponent != -1) {
+                write_client(client->sock, "Client is already in a game. Wait until they finish\n");
+                break;
+            }
+            
+            char confirmationMessage[BUF_SIZE];
+            snprintf(confirmationMessage, sizeof(confirmationMessage), "Challenge sent to %s\n", context->clients[j].name);
+            write_client(client->sock, confirmationMessage);
+
+            char message[BUF_SIZE];
+            snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (accept/reject)\n", client->name);
+            write_client(context->clients[j].sock, message);
+
+            int clientIndex = client - context->clients;
+            client->challengedBy = j;
+            context->clients[j].challengedBy = clientIndex;
+            break;
+        }
+    }
+}
+
+// Fonction pour gérer une demande de spectateur
+void handleWatchRequest(Client* client, const char* request) {
+    char *player1_name = strtok(strdup(request), " ");
+    char *player2_name = strtok(NULL, "");
+
+    if (player1_name && player2_name) {
+        int gameSession = -1;
+
+        for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
+            if (context->gameSessions[j].isActive) {
+                if ((strcmp(context->gameSessions[j].player1->name, player1_name) == 0 && 
+                    strcmp(context->gameSessions[j].player2->name, player2_name) == 0) ||
+                    (strcmp(context->gameSessions[j].player1->name, player2_name) == 0 && 
+                    strcmp(context->gameSessions[j].player2->name, player1_name) == 0)) {
+                    gameSession = j;
+                    break;
+                }
+            }
+        }
+
+        if (gameSession != -1) {
+            if (addSpectatorToGame(gameSession, client)) {
+                write_client(client->sock, "You are now watching the game.\n");
+                GameSession* session = &context->gameSessions[gameSession];
+                char serializedGame[BUF_SIZE];
+                serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+                write_client(client->sock, serializedGame);
+            } else {
+                write_client(client->sock, "No room for spectators in this game.\n");
+            }
+        } else {
+            write_client(client->sock, "No such game found between the specified players.\n");
+        }
+    }
+    free(player1_name); // Libérer la mémoire allouée par strdup
+}
+
+// Fonction pour gérer la déconnexion d'un client
+void handleClientDisconnect(int clientIndex) {
+    Client* client = &context->clients[clientIndex];
+    int gameSession = findClientGameSession(client);
+    if(gameSession != -1) {
+        GameSession* session = &context->gameSessions[gameSession];
+        Client* otherPlayer = (session->player1 == client) ? session->player2 : session->player1;
+        write_client(otherPlayer->sock, "Your opponent disconnected. Game Over!\n");
+        session->isActive = 0;
+    }
+    
+    closesocket(client->sock);
+    remove_client(context->clients, clientIndex, &context->actualClients);
+}
+
 // Gérer un coup reçu d'un client
 static void handleGameMove(int sessionId, Client* client, const char* buffer) {
-    GameSession* session = &gameSessions[sessionId];
+    GameSession* session = &context->gameSessions[sessionId];
     
     // Vérifier si c'est bien le tour du joueur
     Client* currentPlayer = (session->currentPlayerIndex == 0) ? session->player1 : session->player2;
@@ -196,21 +246,114 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     }
 }
 
-
-
-// Ajouter un spectateur à une session de jeu
-static int addSpectatorToGame(int sessionId, Client* spectator) {
-    GameSession* session = &gameSessions[sessionId];
-    if (session->spectatorCount < MAX_SPECTATORS) {
-        session->spectators[session->spectatorCount++] = spectator;
-        return 1;  // Ajout réussi
+// Fonction pour gérer les messages de jeu ou de chat
+void handleGameOrChat(Client* client, const char* message) {
+    int gameSession = findClientGameSession(client);
+    if(gameSession != -1 && strncmp(message, "all ", 4) != 0 && strncmp(message, "private ", 8) != 0) {
+        handleGameMove(gameSession, client, message);                         //TODO add something to save all moves in a game to watch it later
+    } else {
+        handleChatMessage(client, message);
     }
-    return 0;  // Pas d'espace pour plus de spectateurs
+}
+
+// Fonction pour gérer les messages de chat
+void handleChatMessage(Client* client, const char* message) {
+    if(strncmp(message, "private ", 8) == 0) {
+        handlePrivateMessage(client, message + 8);
+    } else if(strncmp(message, "all ", 4) == 0) {
+        send_message_to_all_clients(context->clients, *client, context->actualClients, message + 4, 0);
+    } else if(client->challengedBy != -1) {
+        handleChallengeResponse(client, message);
+    }
+}
+
+// Fonction pour gérer les messages privés
+void handlePrivateMessage(Client* client, const char* message) {
+    char *dest_name = strtok(strdup(message), " ");
+    char *private_message = strtok(NULL, "");
+
+    if (dest_name && private_message) {
+        int found = 0;
+        for (int j = 0; j < context->actualClients; j++) {
+            if (strcmp(context->clients[j].name, dest_name) == 0) {
+                char formattedMessage[BUF_SIZE];
+                snprintf(formattedMessage, sizeof(formattedMessage), "[Private] %s: %s", client->name, private_message);
+                write_client(context->clients[j].sock, formattedMessage);
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            write_client(client->sock, "Client not found.\n");
+        }
+    } else {
+        write_client(client->sock, "Usage: private <client_name> <message>\n");
+    }
+    free(dest_name);
+}
+
+// Fonction pour gérer les réponses aux défis
+void handleChallengeResponse(Client* client, const char* response) {
+    if(strcmp(response, "accept") == 0) {
+        int opponentIndex = client->challengedBy;
+        int sessionId = createGameSession(client, &context->clients[opponentIndex]);
+        if(sessionId != -1) {
+            startGame(sessionId, client, &context->clients[opponentIndex]);
+        }
+        client->challengedBy = -1;
+        context->clients[opponentIndex].challengedBy = -1;
+
+        client->inGameOpponent = opponentIndex;
+        context->clients[opponentIndex].inGameOpponent = client - context->clients;
+    }
+    else if(strcmp(response, "reject") == 0) {
+        write_client(context->clients[client->challengedBy].sock, "Challenge declined.\n");
+        context->clients[client->challengedBy].challengedBy = -1;
+        client->challengedBy = -1;
+    }
+}
+
+// Fonction pour démarrer une partie
+void startGame(int sessionId, Client* client1, Client* client2) {
+    GameSession* session = &context->gameSessions[sessionId];
+    char serializedGame[BUF_SIZE];
+    serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+    
+    write_client(client1->sock, "Game starting! ");
+    write_client(client2->sock, "Game starting! ");
+    
+    if(session->currentPlayerIndex == 0) {
+        write_client(client1->sock, "Your turn!\n");
+        write_client(client2->sock, "Waiting for opponent...\n");
+    } else {
+        write_client(client2->sock, "Your turn!\n");
+        write_client(client1->sock, "Waiting for opponent...\n");
+    }
+    
+    write_client(client1->sock, serializedGame);
+    write_client(client2->sock, serializedGame);
+}
+
+// Fonction pour vérifier les timeouts des parties
+void checkGameTimeouts() {
+    time_t currentTime = time(NULL);
+    for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
+        if(context->gameSessions[i].isActive) {
+            if(currentTime - context->gameSessions[i].lastActivity > 300) {
+                GameSession* session = &context->gameSessions[i];
+                write_client(session->player1->sock, "Game timed out!\n");
+                write_client(session->player2->sock, "Game timed out!\n");
+                session->isActive = 0;
+                session->player1->inGameOpponent = -1;
+                session->player2->inGameOpponent = -1;
+            }
+        }
+    }
 }
 
 // Supprimer un spectateur de la session de jeu
 static void removeSpectatorFromGame(int sessionId, Client* spectator) {
-    GameSession* session = &gameSessions[sessionId];
+    GameSession* session = &(context->gameSessions[sessionId]);
     for (int i = 0; i < session->spectatorCount; i++) {
         if (session->spectators[i] == spectator) {
             // Décaler les spectateurs restants
@@ -222,30 +365,115 @@ static void removeSpectatorFromGame(int sessionId, Client* spectator) {
     }
 }
 
+// Ajouter un spectateur à une session de jeu
+static int addSpectatorToGame(int sessionId, Client* spectator) {
+    GameSession* session = &(context->gameSessions[sessionId]);
+    if (session->spectatorCount < MAX_SPECTATORS) {
+        session->spectators[session->spectatorCount++] = spectator;
+        return 1;  // Ajout réussi
+    }
+    return 0;  // Pas d'espace pour plus de spectateurs
+}
 
+handleNewConnection(){
+    struct message msg;
+    SOCKADDR_IN csin = {0};
+            socklen_t sinsize = sizeof csin;
+            int csock = accept(context->serverSocket, (SOCKADDR *)&csin, &sinsize);
+            if(csock == SOCKET_ERROR) {
+                perror("accept()");
+                return;
+            }
+    if(read_client(csock, &msg) <= 0) {
+        return;
+    }
+
+    /* after connecting the client sends its name */
+    context->maxSocket = csock > context->maxSocket ? csock : context->maxSocket;
+
+    // Demander et vérifier si le nom est déjà pris
+    Client c = {csock};
+    strncpy(c.name, msg.content, BUF_SIZE - 1);
+
+        // Vérification du nom
+    if(isNameTaken(c.name, context->clients, context->actualClients)) {
+        write_client(c.sock, "Name already taken. Please choose another name:\n");
+        // Lire un nouveau nom du client
+        if(read_client(c.sock, &msg) == -1) {   //TODO : faire en sorte que ça ne soit pas bloquant
+            return;
+        }
+        strncpy(c.name, msg.content, BUF_SIZE - 1);
+    }
+    c.biography[0] = 0;
+    c.challengedBy = -1;
+    c.inGameOpponent = -1;
+
+    context->clients[context->actualClients] = c;
+    context->actualClients++;
+}
+
+
+void processClientMessage(Client* client, const char* message) {
+    if(strcmp(message, "list") == 0) {
+        sendClientList(client);
+    }
+    else if(strcmp(message, "games") == 0) {
+        sendGamesList(client);
+    }
+    else if(strncmp(message, "challenge ", 10) == 0) {
+        char * challengedName = message + 10;
+        challengedName[strcspn(challengedName, "\n")] = 0;
+        handleChallenge(client, challengedName);
+    }
+    else if(strncmp(message, "watch ", 6) == 0) {
+        handleWatchRequest(client, message + 6);
+    }
+    else if(strncmp(message, "unwatch", 7) == 0) {
+        int gameSession = findSpectatorGameSession(client);
+        if(gameSession != -1) {
+            removeSpectatorFromGame(gameSession, client);
+            write_client(client->sock, "You are no longer watching the game.\n");
+        } else {
+            write_client(client->sock, "You are not watching any game.\n");
+        }
+    }
+    else if(strncmp(message, "biography", 9) == 0) {
+        write_client(client->sock, "Biography not implemented yet.\n");
+        //TODO : implement biography : read others and write your own
+    }
+    else if(strncmp(message, "friend", 6) == 0) {
+        // TODO : Implement add and remove friend
+        write_client(client->sock, "Friend not implemented yet.\n");
+    }
+    else if(strncmp(message, "unfriend", 8) == 0) {
+        write_client(client->sock, "Unfriend not implemented yet.\n");
+    }
+    else if(strncmp(message, "privacy", 7) == 0) {
+        //TODO : implement privacy : set privacy private or public, then change for spectators
+        write_client(client->sock, "Privacy not implemented yet.\n");
+    }
+    else {
+        handleGameOrChat(client, message);
+    }
+    }
 
 static void app(void) {
     SOCKET sock = init_connection();
     initServerContext(sock);
-    struct message msg; 
-    int actual = 0;
-    int max = sock;
-    Client clients[MAX_CLIENTS];
+    struct message msg;
     fd_set rdfs;
-    
-    initGameSessions();
 
-    while(1) {
+    while(context->isRunning) {
         FD_ZERO(&rdfs);
         FD_SET(STDIN_FILENO, &rdfs);
         FD_SET(sock, &rdfs);
 
-        for(int i = 0; i < actual; i++) {
-            FD_SET(clients[i].sock, &rdfs);
-            max = clients[i].sock > max ? clients[i].sock : max;
+        for(int i = 0; i < context->actualClients; i++) {
+            FD_SET(context->clients[i].sock, &rdfs);
+            context->maxSocket = context->clients[i].sock > context->maxSocket ? context->clients[i].sock : context->maxSocket;
         }
 
-        if(select(max + 1, &rdfs, NULL, NULL, NULL) == -1) {
+        if(select(context->maxSocket + 1, &rdfs, NULL, NULL, NULL) == -1) {
             perror("select()");
             exit(errno);
         }
@@ -254,296 +482,32 @@ static void app(void) {
             break;
         }
         else if(FD_ISSET(sock, &rdfs)) {
-            SOCKADDR_IN csin = {0};
-            socklen_t sinsize = sizeof csin;
-            int csock = accept(sock, (SOCKADDR *)&csin, &sinsize);
-            if(csock == SOCKET_ERROR) {
-                perror("accept()");
-                continue;
-            }
-
-            if(read_client(csock, &msg) == -1) {
-                continue;
-            }
-
-            /* after connecting the client sends its name */
-            max = csock > max ? csock : max;
-
-            // Demander et vérifier si le nom est déjà pris
-            Client c = {csock};
-            strncpy(c.name, msg.content, BUF_SIZE - 1);
-
-            // Vérification du nom
-            if(isNameTaken(c.name, clients, actual)) {
-                write_client(c.sock, "Name already taken. Please choose another name:\n");
-                // Lire un nouveau nom du client
-                if(read_client(c.sock, &msg) == -1) {   //TODO : faire en sorte que ça ne soit pas bloquant
-                    continue;
-                }
-                strncpy(c.name, msg.content, BUF_SIZE - 1);
-            }
-            c.biography[0] = 0;
-            c.challengedBy = -1;
-            c.inGameOpponent = -1;
-
-            clients[actual] = c;
-            actual++;
+            handleNewConnection();
         }
-        else { 
-            for(int i = 0; i < actual; i++) {
-                if(FD_ISSET(clients[i].sock, &rdfs)) {
-                    Client* client = &clients[i];
+        else {
+            for(int i = 0; i < context->actualClients; i++) {
+                if(FD_ISSET(context->clients[i].sock, &rdfs)) {
+                    Client* client = &context->clients[i];
                     int c = read_client(client->sock, &msg);
                     
                     if(c == 0) {
-                        // Déconnexion du client
-                        int gameSession = findClientGameSession(client);
-                        if(gameSession != -1) {
-                            // Informer l'autre joueur et terminer la partie
-                            GameSession* session = &gameSessions[gameSession];
-                            Client* otherPlayer = (session->player1 == client) ? 
-                                                 session->player2 : session->player1;
-                            write_client(otherPlayer->sock, "Your opponent disconnected. Game Over!\n");
-                            session->isActive = 0;
-                        }
-                        
-                        closesocket(clients[i].sock);
-                        remove_client(clients, i, &actual);
+                        handleClientDisconnect(i);
                         continue;
                     }
-
-                    if(strcmp(msg.content, "list") == 0) {
-                        char client_list[BUF_SIZE] = "Connected clients:\n";
-                        for(int j = 0; j < actual; j++) {
-                            strncat(client_list, clients[j].name, BUF_SIZE - strlen(client_list) - 1);
-                            strncat(client_list, "\n", BUF_SIZE - strlen(client_list) - 1);
-                        }
-                        write_client(client->sock, client_list);
-                    }
-                    else if (strcmp(msg.content, "games") == 0) {
-                        char game_list[BUF_SIZE] = "Active games:\n";
-                        for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
-                            if (gameSessions[j].isActive) {
-                                strncat(game_list, gameSessions[j].player1->name, BUF_SIZE - strlen(game_list) - 1);
-                                strncat(game_list, " vs ", BUF_SIZE - strlen(game_list) - 1);
-                                strncat(game_list, gameSessions[j].player2->name, BUF_SIZE - strlen(game_list) - 1);
-                                strncat(game_list, "\n", BUF_SIZE - strlen(game_list) - 1);
-                            }
-                        }
-                        write_client(client->sock, game_list);
-                    }
-                    else if(strncmp(msg.content, "challenge ", 10) == 0) { 
-                        char *challenged_name = msg.content + 10;
-                        challenged_name[strcspn(challenged_name, "\n")] = 0;
-
-                        for(int j = 0; j < actual; j++) {
-                            if(strcmp(clients[j].name, challenged_name) == 0) {
-                                if (clients[j].challengedBy != -1) {
-                                    write_client(client->sock, "Client is already challenged by someone else. Wait a bit until he answers\n");
-                                    break;
-                                }
-                                if (clients[j].inGameOpponent != -1) {
-                                    write_client(client->sock, "Client is already in a game. Wait until he finishes\n");
-                                    break;
-                                }
-                                char confirmationMessage[BUF_SIZE];
-                                snprintf(confirmationMessage, sizeof(confirmationMessage), "Challenge sent to %s\n", clients[j].name);
-                                write_client(client->sock, confirmationMessage);
-
-                                char message[BUF_SIZE];
-                                snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (accept/reject)\n", client->name);
-                                write_client(clients[j].sock, message);
-
-
-                                client->challengedBy = j;
-                                clients[j].challengedBy = i;                                           
-                                break;
-                            }
-                        }
-                    }
-                    else { 
-                        // Vérifier si le client est dans une partie
-                        int gameSession = findClientGameSession(client);
-                        if(gameSession != -1 && strncmp(msg.content, "all ", 4) != 0 && strncmp(msg.content, "private ", 8) != 0) {
-                            handleGameMove(gameSession, client, msg.content);
-                        }
-                        //TODO add something to save all moves in a game to watch it later
-                        else {
-                            // Vérification si c'est un message privé
-                            if(strncmp(msg.content, "private ", 8) == 0) {
-                                // Extraire le destinataire et le message
-                                char *message_start = msg.content + 8;
-                                char *dest_name = strtok(message_start, " ");
-                                char *private_message = strtok(NULL, "");
-
-                                if (dest_name && private_message) {
-                                    int found = 0;
-                                    for (int j = 0; j < actual; j++) {
-                                        if (strcmp(clients[j].name, dest_name) == 0) {
-                                            // Créer le message privé et l'envoyer sur une seule ligne
-                                            char message[BUF_SIZE];
-                                            snprintf(message, sizeof(message), "[Private] %s: %s", client->name, private_message);
-                                            
-                                            write_client(clients[j].sock, message);
-                                            found = 1;
-                                            break;
-                                        }
-                                    }
-                                    if (!found) {
-                                        write_client(client->sock, "Client not found.\n");
-                                    }
-                                } else {
-                                    write_client(client->sock, "Usage: private <client_name> <message>\n");
-                                }
-                            } else if (strncmp(msg.content, "all ", 4) == 0) {
-                                // Si ce n'est pas un message privé, on l'envoie à tous les clients
-                                char *message_start = msg.content + 4;
-                                send_message_to_all_clients(clients, *client, actual, message_start, 0);
-                            } else if(strncmp(msg.content, "watch ", 6) == 0) {
-                                char *watchRequest = msg.content + 6;
-                                char *player1_name = strtok(watchRequest, " ");
-                                char *player2_name = strtok(NULL, "");
-
-                                if (player1_name && player2_name) {
-                                    int gameSession = -1;
-
-                                    // Chercher une session de jeu correspondant aux deux joueurs
-                                    for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
-                                        if (gameSessions[j].isActive) {
-                                            if ((strcmp(gameSessions[j].player1->name, player1_name) == 0 && 
-                                                strcmp(gameSessions[j].player2->name, player2_name) == 0) ||
-                                                (strcmp(gameSessions[j].player1->name, player2_name) == 0 && 
-                                                strcmp(gameSessions[j].player2->name, player1_name) == 0)) {
-                                                gameSession = j;
-                                                break;
-                                            }
-                                        }
-                                    }
-
-                                    if (gameSession != -1) {
-                                        if (addSpectatorToGame(gameSession, client)) {
-                                            write_client(client->sock, "You are now watching the game.\n");
-
-                                            // Envoyer l'état actuel de la partie au spectateur
-                                            GameSession* session = &gameSessions[gameSession];
-                                            char serializedGame[BUF_SIZE];
-                                            serializeGame(&session->game, serializedGame, sizeof(serializedGame));
-                                            write_client(client->sock, serializedGame);
-                                        } else {
-                                            write_client(client->sock, "No room for spectators in this game.\n");
-                                        }
-                                    } else {
-                                        write_client(client->sock, "No such game found between the specified players.\n");
-                                    }
-                                }
-                            } else if (strncmp(msg.content, "unwatch", 7) == 0) {
-                                int gameSession = findSpectatorGameSession(client);
-                                if (gameSession != -1) {
-                                    removeSpectatorFromGame(gameSession, client);
-                                    write_client(client->sock, "You are no longer watching the game.\n");
-                                } else {
-                                    write_client(client->sock, "You are not watching any game.\n");
-                                }
-                            } else if(strncmp(msg.content, "biography", 9) == 0){
-                                //TODO : implement biography : read others and write your own
-                                write_client(client->sock, "Biography not implemented yet.\n");
-                            } // TODO : Implement add and remove friend
-                            else if (strncmp(msg.content, "friend", 6) == 0) {
-                                write_client(client->sock, "Friend not implemented yet.\n");
-                            } else if (strncmp(msg.content, "unfriend", 8) == 0) {
-                                write_client(client->sock, "Unfriend not implemented yet.\n");
-                            } else if(strncmp(msg.content, "privacy", 7) == 0){
-                                //TODO : implement privacy : set privacy private or public, then change for spectators
-                                write_client(client->sock, "Privacy not implemented yet.\n");
-                            } else if (client->challengedBy != -1){ // Let it always be the last one, or right before game
-                                if(strcmp(msg.content, "accept") == 0){
-                                    int opponentIndex = client->challengedBy;
-                                    int sessionId = createGameSession(client, &clients[opponentIndex]);
-                                    if(sessionId != -1) {
-                                        GameSession* session = &gameSessions[sessionId];
-                                        char serializedGame[BUF_SIZE];
-                                        serializeGame(&session->game, serializedGame, sizeof(serializedGame));
-                                        
-                                        write_client(client->sock, "Game starting! ");
-                                        write_client(clients[opponentIndex].sock, "Game starting! ");
-                                        
-                                        if(session->currentPlayerIndex == 0) {
-                                            write_client(client->sock, "Your turn!\n");
-                                            write_client(clients[opponentIndex].sock, "Waiting for opponent...\n");
-                                        } else {
-                                            write_client(clients[opponentIndex].sock, "Your turn!\n");
-                                            write_client(client->sock, "Waiting for opponent...\n");
-                                        }
-                                        
-                                        write_client(client->sock, serializedGame);
-                                        write_client(clients[opponentIndex].sock, serializedGame);
-                                    }
-                                    client->challengedBy = -1;
-                                    clients[opponentIndex].challengedBy = -1;
-
-                                    client->inGameOpponent = opponentIndex;
-                                    clients[opponentIndex].inGameOpponent = i;
-                                    break;
-                                }
-                                else if(strcmp(msg.content, "reject") == 0){
-                                    write_client(clients[client->challengedBy].sock, "Challenge declined.\n");
-                                    client->challengedBy = -1;
-                                    clients[client->challengedBy].challengedBy = -1;
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    
+                    processClientMessage(client, msg.content);
                 }
             }
         }
 
-        // Vérifier les timeouts des parties
-        time_t currentTime = time(NULL);
-        for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
-            if(gameSessions[i].isActive) {
-                if(currentTime - gameSessions[i].lastActivity > 300) { // 5 minutes timeout
-                    write_client(gameSessions[i].player1->sock, "Game timed out!\n");
-                    write_client(gameSessions[i].player2->sock, "Game timed out!\n");
-                    gameSessions[i].isActive = 0;
-
-                    gameSessions[i].player1->inGameOpponent = -1;
-                    gameSessions[i].player2->inGameOpponent = -1;
-                }
-            }
-        }
+        checkGameTimeouts();
     }
 
-    clear_clients(clients, actual);
+    clear_clients(context->clients, context->actualClients);
     end_connection(sock);
+    free(context);
 }
 
-static void clear_clients(Client *clients, int actual) {
-    for(int i = 0; i < actual; i++) {
-        closesocket(clients[i].sock);
-    }
-}
-
-static void remove_client(Client *clients, int to_remove, int *actual) {
-    memmove(clients + to_remove, clients + to_remove + 1, (*actual - to_remove - 1) * sizeof(Client));
-    (*actual)--;
-}
-
-static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server) {
-    char message[BUF_SIZE];
-    message[0] = 0;
-    
-    for(int i = 0; i < actual; i++) {
-        if(sender.sock != clients[i].sock) {
-            if(from_server == 0) {
-                strncpy(message, sender.name, BUF_SIZE - 1);
-                strncat(message, " : ", sizeof message - strlen(message) - 1);
-            }
-            strncat(message, buffer, sizeof message - strlen(message) - 1);
-            write_client(clients[i].sock, message);
-        }
-    }
-}
 
 static int init_connection(void) {
     SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -571,8 +535,15 @@ static int init_connection(void) {
     return sock;
 }
 
+
 static void end_connection(int sock) {
     closesocket(sock);
+}
+
+static void clear_clients(Client *clients, int actual) {
+    for(int i = 0; i < actual; i++) {
+        closesocket(clients[i].sock);
+    }
 }
 
 static int read_client(SOCKET sock, struct message *msg)
@@ -612,6 +583,7 @@ static int read_client(SOCKET sock, struct message *msg)
     return content_read;
 }
 
+
 static void write_client(SOCKET sock, const char *buffer)
 {
     struct message msg;
@@ -636,6 +608,28 @@ static void write_client(SOCKET sock, const char *buffer)
         return;
     }
 }
+
+static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server) {
+    char message[BUF_SIZE];
+    message[0] = 0;
+    
+    for(int i = 0; i < actual; i++) {
+        if(sender.sock != clients[i].sock) {
+            if(from_server == 0) {
+                strncpy(message, sender.name, BUF_SIZE - 1);
+                strncat(message, " : ", sizeof message - strlen(message) - 1);
+            }
+            strncat(message, buffer, sizeof message - strlen(message) - 1);
+            write_client(clients[i].sock, message);
+        }
+    }
+}
+
+static void remove_client(Client *clients, int to_remove, int *actual) {
+    memmove(clients + to_remove, clients + to_remove + 1, (*actual - to_remove - 1) * sizeof(Client));
+    (*actual)--;
+}
+
 
 int main(int argc, char **argv) {
     init();
