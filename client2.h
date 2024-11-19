@@ -3,6 +3,16 @@
 
 #include "message.h"
 
+#define MAX_FRIENDS 20
+
+enum Privacy
+{
+   PUBLIC,
+   FRIENDS,
+   PRIVATE
+};
+
+
 typedef struct
 {
    SOCKET sock;
@@ -10,6 +20,9 @@ typedef struct
    int challengedBy;
    int inGameOpponent;
    char biography[BUF_SIZE];
+   enum Privacy privacy;
+   char friendList[MAX_FRIENDS][BUF_SIZE];
+   int friendCount;
 }Client;
 
 #endif /* guard */
