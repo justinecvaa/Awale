@@ -93,6 +93,16 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     
     // Vérifier si c'est bien le tour du joueur
     Client* currentPlayer = (session->currentPlayerIndex == 0) ? session->player1 : session->player2;
+
+
+    if (strncmp(buffer, "save", 4) == 0) {
+        // Sauvegarder la partie
+        saveGame(&session->game);
+        write_client(client->sock, "Game saved.\n");
+        return;
+    }
+
+
     if(client != currentPlayer || !session->waitingForMove) {
         write_client(client->sock, "It's not your turn!\n");
         return;
@@ -266,7 +276,7 @@ static void app(void) {
                     else { 
                         // Vérifier si le client est dans une partie
                         int gameSession = findClientGameSession(client);
-                        if(gameSession != -1) {
+                        if(gameSession != -1 && strncmp(msg.content, "all ", 4) != 0 && strncmp(msg.content, "private ", 8) != 0) {
                             handleGameMove(gameSession, client, msg.content);
                         }
                         else {
