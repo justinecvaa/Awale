@@ -313,7 +313,7 @@ static void app(void) {
                                 write_client(client->sock, confirmationMessage);
 
                                 char message[BUF_SIZE];
-                                snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (yes/no)\n", client->name);
+                                snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (accept/reject)\n", client->name);
                                 write_client(clients[j].sock, message);
 
 
@@ -321,43 +321,6 @@ static void app(void) {
                                 clients[j].challengedBy = i;                                           
                                 break;
                             }
-                        }
-                    }
-                    else if (client->challengedBy != -1){
-                        if(strcmp(msg.content, "yes") == 0){
-                            int opponentIndex = client->challengedBy;
-                            int sessionId = createGameSession(client, &clients[opponentIndex]);
-                            if(sessionId != -1) {
-                                GameSession* session = &gameSessions[sessionId];
-                                char serializedGame[BUF_SIZE];
-                                serializeGame(&session->game, serializedGame, sizeof(serializedGame));
-                                
-                                write_client(client->sock, "Game starting! ");
-                                write_client(clients[opponentIndex].sock, "Game starting! ");
-                                
-                                if(session->currentPlayerIndex == 0) {
-                                    write_client(client->sock, "Your turn!\n");
-                                    write_client(clients[opponentIndex].sock, "Waiting for opponent...\n");
-                                } else {
-                                    write_client(clients[opponentIndex].sock, "Your turn!\n");
-                                    write_client(client->sock, "Waiting for opponent...\n");
-                                }
-                                
-                                write_client(client->sock, serializedGame);
-                                write_client(clients[opponentIndex].sock, serializedGame);
-                            }
-                            client->challengedBy = -1;
-                            clients[opponentIndex].challengedBy = -1;
-
-                            client->inGameOpponent = opponentIndex;
-                            clients[opponentIndex].inGameOpponent = i;
-                            break;
-                        }
-                        else if(strcmp(msg.content, "no") == 0){
-                            write_client(clients[client->challengedBy].sock, "Challenge declined.\n");
-                            client->challengedBy = -1;
-                            clients[client->challengedBy].challengedBy = -1;
-                            break;
                         }
                     }
                     else { 
@@ -441,6 +404,42 @@ static void app(void) {
                                     write_client(client->sock, "You are no longer watching the game.\n");
                                 } else {
                                     write_client(client->sock, "You are not watching any game.\n");
+                                }
+                            } else if (client->challengedBy != -1){
+                                if(strcmp(msg.content, "accept") == 0){
+                                    int opponentIndex = client->challengedBy;
+                                    int sessionId = createGameSession(client, &clients[opponentIndex]);
+                                    if(sessionId != -1) {
+                                        GameSession* session = &gameSessions[sessionId];
+                                        char serializedGame[BUF_SIZE];
+                                        serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+                                        
+                                        write_client(client->sock, "Game starting! ");
+                                        write_client(clients[opponentIndex].sock, "Game starting! ");
+                                        
+                                        if(session->currentPlayerIndex == 0) {
+                                            write_client(client->sock, "Your turn!\n");
+                                            write_client(clients[opponentIndex].sock, "Waiting for opponent...\n");
+                                        } else {
+                                            write_client(clients[opponentIndex].sock, "Your turn!\n");
+                                            write_client(client->sock, "Waiting for opponent...\n");
+                                        }
+                                        
+                                        write_client(client->sock, serializedGame);
+                                        write_client(clients[opponentIndex].sock, serializedGame);
+                                    }
+                                    client->challengedBy = -1;
+                                    clients[opponentIndex].challengedBy = -1;
+
+                                    client->inGameOpponent = opponentIndex;
+                                    clients[opponentIndex].inGameOpponent = i;
+                                    break;
+                                }
+                                else if(strcmp(msg.content, "reject") == 0){
+                                    write_client(clients[client->challengedBy].sock, "Challenge declined.\n");
+                                    client->challengedBy = -1;
+                                    clients[client->challengedBy].challengedBy = -1;
+                                    break;
                                 }
                             }
                         }
