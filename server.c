@@ -112,7 +112,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 
     if (strncmp(buffer, "save", 4) == 0) {
         // Sauvegarder la partie
-        saveGame(&session->game);
+        saveGame(&session->game); //TODO : correct that (maybe handleSaveCommand)
         write_client(client->sock, "Game saved.\n");
         return;
     }
@@ -294,7 +294,7 @@ static void app(void) {
                         }
                         write_client(client->sock, game_list);
                     }
-                    else if(strncmp(msg.content, "challenge ", 10) == 0) { // TODO : Changer cela pour que ça ne soit plus bloquant
+                    else if(strncmp(msg.content, "challenge ", 10) == 0) { 
                         char *challenged_name = msg.content + 10;
                         challenged_name[strcspn(challenged_name, "\n")] = 0;
 
@@ -329,6 +329,7 @@ static void app(void) {
                         if(gameSession != -1 && strncmp(msg.content, "all ", 4) != 0 && strncmp(msg.content, "private ", 8) != 0) {
                             handleGameMove(gameSession, client, msg.content);
                         }
+                        //TODO add something to save all moves in a game to watch it later
                         else {
                             // Vérification si c'est un message privé
                             if(strncmp(msg.content, "private ", 8) == 0) {
@@ -405,7 +406,18 @@ static void app(void) {
                                 } else {
                                     write_client(client->sock, "You are not watching any game.\n");
                                 }
-                            } else if (client->challengedBy != -1){
+                            } else if(strncmp(msg.content, "biography", 9) == 0){
+                                //TODO : implement biography : read others and write your own
+                                write_client(client->sock, "Biography not implemented yet.\n");
+                            } // TODO : Implement add and remove friend
+                            else if (strncmp(msg.content, "friend", 6) == 0) {
+                                write_client(client->sock, "Friend not implemented yet.\n");
+                            } else if (strncmp(msg.content, "unfriend", 8) == 0) {
+                                write_client(client->sock, "Unfriend not implemented yet.\n");
+                            } else if(strncmp(msg.content, "privacy", 7) == 0){
+                                //TODO : implement privacy : set privacy private or public, then change for spectators
+                                write_client(client->sock, "Privacy not implemented yet.\n");
+                            } else if (client->challengedBy != -1){ // Let it always be the last one, or right before game
                                 if(strcmp(msg.content, "accept") == 0){
                                     int opponentIndex = client->challengedBy;
                                     int sessionId = createGameSession(client, &clients[opponentIndex]);
@@ -456,6 +468,9 @@ static void app(void) {
                     write_client(gameSessions[i].player1->sock, "Game timed out!\n");
                     write_client(gameSessions[i].player2->sock, "Game timed out!\n");
                     gameSessions[i].isActive = 0;
+
+                    gameSessions[i].player1->inGameOpponent = -1;
+                    gameSessions[i].player2->inGameOpponent = -1;
                 }
             }
         }
