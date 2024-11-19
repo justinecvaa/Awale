@@ -29,6 +29,16 @@ static void end(void) {
 #endif
 }
 
+// Vérifie si le nom est déjà pris par un autre client
+static int isNameTaken(const char* name, Client* clients, int actual) {
+    for(int i = 0; i < actual; i++) {
+        if(strcmp(clients[i].name, name) == 0) {
+            return 1;  // Nom déjà pris
+        }
+    }
+    return 0;  // Nom disponible
+}
+
 // Initialisation des sessions de jeu
 static void initGameSessions(void) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
@@ -163,8 +173,20 @@ static void app(void) {
             /* after connecting the client sends its name */
             max = csock > max ? csock : max;
 
+            // Demander et vérifier si le nom est déjà pris
             Client c = {csock};
             strncpy(c.name, msg.content, BUF_SIZE - 1);
+
+            // Vérification du nom
+            if(isNameTaken(c.name, clients, actual)) {
+                write_client(c.sock, "Name already taken. Please choose another name:\n");
+                // Lire un nouveau nom du client
+                if(read_client(c.sock, &msg) == -1) {   //TODO : faire en sorte que ça ne soit pas bloquant
+                    continue;
+                }
+                strncpy(c.name, msg.content, BUF_SIZE - 1);
+            }
+
             clients[actual] = c;
             actual++;
         }
@@ -204,7 +226,7 @@ static void app(void) {
                         challenged_name[strcspn(challenged_name, "\n")] = 0;
 
                         for(int j = 0; j < actual; j++) {
-                            if(strcmp(clients[j].name, challenged_name) == 0 && findClientGameSession(&clients[j]) == -1) {
+                            if(strcmp(clients[j].name, challenged_name) == 0) {
                                 char message[BUF_SIZE];
                                 snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (yes/no)\n", client->name);
                                 write_client(clients[j].sock, message);
@@ -238,9 +260,6 @@ static void app(void) {
                                     write_client(clients[j].sock, "Challenge declined.\n");
                                 }
                                 break;
-                            }
-                            else if (findClientGameSession(&clients[j]) != -1) {
-                                write_client(client->sock, "Client is already in a game.\n");
                             }
                         }
                     }
@@ -277,9 +296,10 @@ static void app(void) {
                                 } else {
                                     write_client(client->sock, "Usage: private <client_name> <message>\n");
                                 }
-                            } else {
+                            } else if (strncmp(msg.content, "all ", 4) == 0) {
                                 // Si ce n'est pas un message privé, on l'envoie à tous les clients
-                                send_message_to_all_clients(clients, *client, actual, msg.content, 0);
+                                char *message_start = msg.content + 4;
+                                send_message_to_all_clients(clients, *client, actual, message_start, 0);
                             }
                         }
                     }
