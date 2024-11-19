@@ -85,7 +85,6 @@ static int findSpectatorGameSession(Client* spectator) {
 }
 
 
-
 // Créer une nouvelle partie
 static int createGameSession(Client* player1, Client* player2) {
     int sessionId = findFreeGameSession();
@@ -245,6 +244,9 @@ static void app(void) {
                 }
                 strncpy(c.name, msg.content, BUF_SIZE - 1);
             }
+            c.biography[0] = 0;
+            c.challengedBy = -1;
+            c.inGameOpponent = -1;
 
             clients[actual] = c;
             actual++;
@@ -298,40 +300,64 @@ static void app(void) {
 
                         for(int j = 0; j < actual; j++) {
                             if(strcmp(clients[j].name, challenged_name) == 0) {
+                                if (clients[j].challengedBy != -1) {
+                                    write_client(client->sock, "Client is already challenged by someone else. Wait a bit until he answers\n");
+                                    break;
+                                }
+                                if (clients[j].inGameOpponent != -1) {
+                                    write_client(client->sock, "Client is already in a game. Wait until he finishes\n");
+                                    break;
+                                }
+                                char confirmationMessage[BUF_SIZE];
+                                snprintf(confirmationMessage, sizeof(confirmationMessage), "Challenge sent to %s\n", clients[j].name);
+                                write_client(client->sock, confirmationMessage);
+
                                 char message[BUF_SIZE];
                                 snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (yes/no)\n", client->name);
                                 write_client(clients[j].sock, message);
 
-                                c = read_client(clients[j].sock, &msg);
-                                //buffer[c] = '\0';
-                                
-                                if(strcmp(msg.content, "yes") == 0) {
-                                    int sessionId = createGameSession(client, &clients[j]);
-                                    if(sessionId != -1) {
-                                        GameSession* session = &gameSessions[sessionId];
-                                        char serializedGame[BUF_SIZE];
-                                        serializeGame(&session->game, serializedGame, sizeof(serializedGame));
-                                        
-                                        write_client(client->sock, "Game starting! ");
-                                        write_client(clients[j].sock, "Game starting! ");
-                                        
-                                        if(session->currentPlayerIndex == 0) {
-                                            write_client(client->sock, "Your turn!\n");
-                                            write_client(clients[j].sock, "Waiting for opponent...\n");
-                                        } else {
-                                            write_client(clients[j].sock, "Your turn!\n");
-                                            write_client(client->sock, "Waiting for opponent...\n");
-                                        }
-                                        
-                                        write_client(client->sock, serializedGame);
-                                        write_client(clients[j].sock, serializedGame);
-                                    }
-                                } else {
-                                    write_client(client->sock, "Challenge declined.\n");
-                                    write_client(clients[j].sock, "Challenge declined.\n");
-                                }
+
+                                client->challengedBy = j;
+                                clients[j].challengedBy = i;                                           
                                 break;
                             }
+                        }
+                    }
+                    else if (client->challengedBy != -1){
+                        if(strcmp(msg.content, "yes") == 0){
+                            int opponentIndex = client->challengedBy;
+                            int sessionId = createGameSession(client, &clients[opponentIndex]);
+                            if(sessionId != -1) {
+                                GameSession* session = &gameSessions[sessionId];
+                                char serializedGame[BUF_SIZE];
+                                serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+                                
+                                write_client(client->sock, "Game starting! ");
+                                write_client(clients[opponentIndex].sock, "Game starting! ");
+                                
+                                if(session->currentPlayerIndex == 0) {
+                                    write_client(client->sock, "Your turn!\n");
+                                    write_client(clients[opponentIndex].sock, "Waiting for opponent...\n");
+                                } else {
+                                    write_client(clients[opponentIndex].sock, "Your turn!\n");
+                                    write_client(client->sock, "Waiting for opponent...\n");
+                                }
+                                
+                                write_client(client->sock, serializedGame);
+                                write_client(clients[opponentIndex].sock, serializedGame);
+                            }
+                            client->challengedBy = -1;
+                            clients[opponentIndex].challengedBy = -1;
+
+                            client->inGameOpponent = opponentIndex;
+                            clients[opponentIndex].inGameOpponent = i;
+                            break;
+                        }
+                        else if(strcmp(msg.content, "no") == 0){
+                            write_client(clients[client->challengedBy].sock, "Challenge declined.\n");
+                            client->challengedBy = -1;
+                            clients[client->challengedBy].challengedBy = -1;
+                            break;
                         }
                     }
                     else { 
