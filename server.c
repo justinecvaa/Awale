@@ -390,11 +390,6 @@ static void handleBiography(Client* client, const char* message) {
         write_client(client->sock, "Biography updated.\n");
     } else if (strncmp(message, "read", 4) == 0) {
 
-
-
-
-
-
         message += 4;
         if (strlen(message) == 0) {
             write_client(client->sock, "Your biography:\n");
@@ -424,6 +419,14 @@ static void handleBiography(Client* client, const char* message) {
 }
 
 static void addFriend(Client* client, const char* friendName) {
+    // Vérifiez si l'ami est déjà dans la liste
+    for (int i = 0; i < client->friendCount; i++) {
+        if (strcmp(client->friendList[i], friendName) == 0) {
+            write_client(client->sock, "Friend already added.\n");
+            return;  // Si l'ami est déjà dans la liste, arrêtez la fonction
+        }
+    }
+
     for (int j = 0; j < context->actualClients; j++) {
         if (strcmp(context->clients[j].name, friendName) == 0) {
             if (client->friendCount >= MAX_FRIENDS) {
@@ -453,14 +456,20 @@ void friendResponse(Client* client, const char* response) {
         // Copie le nom du client qui a envoyé la demande dans la liste d'amis
         strncpy(client->friendList[client->friendCount], context->clients[client->friendRequestBy].name, BUF_SIZE - 1);
         client->friendCount++;
-        write_client(client->sock, "Friend added.\n");
+        char confirmationMessage[BUF_SIZE];
+        sprintf(confirmationMessage, "Friend %s added to your friend list.\n", context->clients[client->friendRequestBy].name);
+        write_client(client->sock, confirmationMessage);
 
         // Copie le nom du client qui a accepté dans la liste d'amis de l'autre client
         Client *friend = &context->clients[client->friendRequestBy];
         strncpy(friend->friendList[friend->friendCount], client->name, BUF_SIZE - 1);
         friend->friendCount++;
 
-        write_client(friend->sock, "Friend added.\n");
+        char confirmationMessage2[BUF_SIZE];
+        sprintf(confirmationMessage2, "Friend %s added to your friend list.\n", client->name);
+        write_client(friend->sock, confirmationMessage2);
+        client->friendRequestBy = -1;
+        friend->friendRequestBy = -1;
     }
     else if (strcmp(response, "reject") == 0) {
         write_client(client->sock, "Friend request declined.\n");
@@ -475,6 +484,53 @@ static void listFriends(Client* client) {
     for (int i = 0; i < client->friendCount; i++) {
         write_client(client->sock, client->friendList[i]);
     }
+}
+
+
+static void unfriend(Client* client, const char* friendName) {
+    // Chercher l'ami dans la liste du client
+    for (int i = 0; i < client->friendCount; i++) {
+        if (strcmp(client->friendList[i], friendName) == 0) {
+            // Supprimer l'ami de la liste du client
+            memmove(&client->friendList[i], &client->friendList[i + 1],
+                    (client->friendCount - i - 1) * sizeof(char[BUF_SIZE]));
+            client->friendCount--;
+            char confirmationMessage[BUF_SIZE];
+            snprintf(confirmationMessage, sizeof(confirmationMessage), "Friend %s removed from your friend list.\n", friendName);
+            write_client(client->sock, confirmationMessage);
+
+            // Chercher l'ami dans la liste de l'autre client
+            Client *friend = NULL;
+            for (int j = 0; j < context->actualClients; j++) {
+                if (strcmp(context->clients[j].name, friendName) == 0) {
+                    friend = &context->clients[j];
+                    break;
+                }
+            }
+
+            if (friend != NULL) {
+                // Supprimer le client de la liste des amis de l'autre client
+                for (int i = 0; i < friend->friendCount; i++) {
+                    if (strcmp(friend->friendList[i], client->name) == 0) {
+                        memmove(&friend->friendList[i], &friend->friendList[i + 1],
+                                (friend->friendCount - i - 1) * sizeof(char[BUF_SIZE]));
+                        friend->friendCount--;
+                        break;
+                    }
+                }
+
+                // Envoyer un message à l'autre client
+                char message[BUF_SIZE];
+                snprintf(message, sizeof(message), "%s removed you from their friend list.\n", client->name);
+                write_client(friend->sock, message);
+            }
+
+            return;
+        }
+    }
+
+    // Si l'ami n'est pas trouvé dans la liste du client
+    write_client(client->sock, "Friend not found.\n");
 }
 
 
@@ -568,7 +624,8 @@ void processClientMessage(Client* client, const char* message) {
         //write_client(client->sock, "Friend not implemented yet.\n");
     }
     else if(strncmp(message, "unfriend", 8) == 0) {
-        write_client(client->sock, "Unfriend not implemented yet.\n");
+        char * friendName = message + 9;
+        unfriend(client, friendName);
     }
     else if(strncmp(message, "privacy", 7) == 0) {
         //TODO : implement privacy : set privacy private or public, then change for spectators
