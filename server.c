@@ -313,7 +313,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 // Fonction pour gérer les messages de jeu ou de chat
 void handleGameOrChat(Client* client, const char* message) {
     int gameSession = findClientGameSession(client);
-    if(gameSession != -1 && strncmp(message, "all ", 4) != 0 && strncmp(message, "private ", 8) != 0) {
+    if(gameSession != -1 && strncmp(message, "all ", 4) != 0 && strncmp(message, "private ", 8) != 0) { //TODO : pouvoir accepter les friends
         handleGameMove(gameSession, client, message);                         //TODO add something to save all moves in a game to watch it later
     } else {
         handleChatMessage(client, message);
@@ -740,7 +740,8 @@ static void handleHelp(Client* client) {
     write_client(client->sock, "friends: List your friends\n");
     write_client(client->sock, "friend <name>: Add a friend\n");
     write_client(client->sock, "unfriend <name>: Remove a friend\n");
-    write_client(client->sock, "privacy: Set your privacy settings\n");
+    write_client(client->sock, "privacy <private/friends/public>: Set your privacy settings\n");
+    write_client(client->sock, "privacy: View your privacy settings\n");
     write_client(client->sock, "all <message>: Send a message to all clients\n");
     write_client(client->sock, "private <name> <message>: Send a private message to a client\n");
     write_client(client->sock, "help: Display this help message\n");
@@ -860,7 +861,6 @@ void processClientMessage(Client* client, const char* message) {
     }
     else if(strncmp(message, "biography", 9) == 0) {
         handleBiography(client, message + 10);
-        //TODO : implement biography : read others and write your own
     }
     else if (strcmp(message, "friends") == 0) {
         listFriends(client);
@@ -874,10 +874,8 @@ void processClientMessage(Client* client, const char* message) {
         unfriend(client, friendName);
     }
     else if(strncmp(message, "privacy", 7) == 0) {
-        //TODO : implement privacy : set privacy private or public, then change for spectators
         char* privacy = message + 7;
         handlePrivacy(client, privacy);
-        //write_client(client->sock, "Privacy not implemented yet.\n");
     }
     else if (strncmp(message, "help", 4) == 0) {
         handleHelp(client);
