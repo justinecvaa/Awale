@@ -245,6 +245,17 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         return;
     }
 
+    if (strncmp(buffer, "quit", 4) == 0) {
+        // Quitter la partie
+        char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
+        session->isActive = 0;
+        char message[BUF_SIZE];
+        snprintf(message, sizeof(message), "%s left the game. %s won!\n", client->name, winner);
+        write_client(session->player1->sock, message);
+        write_client(session->player2->sock, message);
+        return;
+    }
+
 
     if(client != currentPlayer || !session->waitingForMove) {
         write_client(client->sock, "It's not your turn!\n");
