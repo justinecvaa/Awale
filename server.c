@@ -534,6 +534,25 @@ static void unfriend(Client* client, const char* friendName) {
 }
 
 
+static void handleHelp(Client* client) {
+    write_client(client->sock, "Available commands:\n");
+    write_client(client->sock, "list: List all connected clients\n");
+    write_client(client->sock, "games: List all active games\n");
+    write_client(client->sock, "challenge <name>: Challenge another client to a game\n");
+    write_client(client->sock, "watch <player1> <player2>: Watch a game between two players\n");
+    write_client(client->sock, "unwatch: Stop watching a game\n");
+    write_client(client->sock, "biography: Read your biography\n");
+    write_client(client->sock, "biography write <biography>: Write your biography\n");
+    write_client(client->sock, "biography read <name>: Read the biography of another client\n");
+    write_client(client->sock, "friends: List your friends\n");
+    write_client(client->sock, "friend <name>: Add a friend\n");
+    write_client(client->sock, "unfriend <name>: Remove a friend\n");
+    write_client(client->sock, "privacy: Set your privacy settings\n");
+    write_client(client->sock, "all <message>: Send a message to all clients\n");
+    write_client(client->sock, "private <name> <message>: Send a private message to a client\n");
+    write_client(client->sock, "help: Display this help message\n");
+}
+
 
 static int isNameTaken(const char* name) {
     for(int i = 0; i < context->actualClients; i++) {
@@ -630,6 +649,9 @@ void processClientMessage(Client* client, const char* message) {
     else if(strncmp(message, "privacy", 7) == 0) {
         //TODO : implement privacy : set privacy private or public, then change for spectators
         write_client(client->sock, "Privacy not implemented yet.\n");
+    }
+    else if (strncmp(message, "help", 4) == 0) {
+        handleHelp(client);
     }
     else {
         handleGameOrChat(client, message);
