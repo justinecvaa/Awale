@@ -56,6 +56,15 @@ void sendGamesList(Client* client) {
             strncat(game_list, context->gameSessions[j].player1->name, BUF_SIZE - strlen(game_list) - 1);
             strncat(game_list, " vs ", BUF_SIZE - strlen(game_list) - 1);
             strncat(game_list, context->gameSessions[j].player2->name, BUF_SIZE - strlen(game_list) - 1);
+            if(context->gameSessions[j].player1->privacy == PUBLIC && context->gameSessions[j].player2->privacy == PUBLIC) {
+                strncat(game_list, " (public)", BUF_SIZE - strlen(game_list) - 1);
+            }
+            else if (context->gameSessions[j].player1->privacy == FRIENDS || context->gameSessions[j].player2->privacy == FRIENDS) {
+                strncat(game_list, " (friends)", BUF_SIZE - strlen(game_list) - 1);
+            }
+            else {
+                strncat(game_list, " (private)", BUF_SIZE - strlen(game_list) - 1);
+            }
             strncat(game_list, "\n", BUF_SIZE - strlen(game_list) - 1);
         }
     }
@@ -165,12 +174,15 @@ void handleWatchRequest(Client* client, const char* request) {
         }
 
         if (gameSession != -1) {
-            if (addSpectatorToGame(gameSession, client)) {
+            int addResult = addSpectatorToGame(gameSession, client);
+            if (addResult == 1) {
                 write_client(client->sock, "You are now watching the game.\n");
                 GameSession* session = &context->gameSessions[gameSession];
                 char serializedGame[BUF_SIZE];
                 serializeGame(&session->game, serializedGame, sizeof(serializedGame));
                 write_client(client->sock, serializedGame);
+            } else if (addResult == 0) {
+                write_client(client->sock, "You are not allowed to watch this game.\n");
             } else {
                 write_client(client->sock, "No room for spectators in this game.\n");
             }
@@ -377,11 +389,31 @@ static void removeSpectatorFromGame(int sessionId, Client* spectator) {
 // Ajouter un spectateur à une session de jeu
 static int addSpectatorToGame(int sessionId, Client* spectator) {
     GameSession* session = &(context->gameSessions[sessionId]);
-    if (session->spectatorCount < MAX_SPECTATORS) {
-        session->spectators[session->spectatorCount++] = spectator;
-        return 1;  // Ajout réussi
+    if(session->player1->privacy == PRIVATE || session->player2->privacy == PRIVATE) {
+        return 0;  // Pas de spectateurs pour les privées
     }
-    return 0;  // Pas d'espace pour plus de spectateurs
+    else if (session->player1->privacy == FRIENDS || session->player2->privacy == FRIENDS) {
+        for (int i = 0; i < session->player1->friendCount; i++) {
+            if (strcmp(session->player1->friendList[i], spectator->name) == 0) {
+                session->spectators[session->spectatorCount++] = spectator;
+                return 1;  // Ajout réussi
+            }
+        }
+        for (int i = 0; i < session->player2->friendCount; i++) {
+            if (strcmp(session->player2->friendList[i], spectator->name) == 0) {
+                session->spectators[session->spectatorCount++] = spectator;
+                return 1;  // Ajout réussi
+            }
+        }
+        return 0;  // Pas d'amis dans la partie
+    }
+    else {
+        if (session->spectatorCount < MAX_SPECTATORS) {
+            session->spectators[session->spectatorCount++] = spectator;
+            return 1;  // Ajout réussi
+        }
+    }   
+    return 2;  // Pas d'espace pour plus de spectateurs
 }
 
 static void handleBiography(Client* client, const char* message) {
@@ -554,6 +586,43 @@ static void handleHelp(Client* client) {
 }
 
 
+static void handlePrivacy(Client* client, const char* message) {
+    // Si aucun message n'est passé, on affiche la confidentialité actuelle du client
+    if (message == NULL || strlen(message) == 0) {
+        char privacyMessage[BUF_SIZE];
+        snprintf(privacyMessage, BUF_SIZE, "Privacy settings: %s\n", privacyToString(client->privacy));
+        write_client(client->sock, privacyMessage);
+        return;
+    }
+    // Si un message est passé, on définit la confidentialité en fonction de ce message
+    if (strncmp(message, " private", 8) == 0) {
+        client->privacy = PRIVATE;  // Affecter l'énumération à privacy
+        write_client(client->sock, "Privacy set to private.\n");
+    } else if (strncmp(message, " friends", 8) == 0) {
+        client->privacy = FRIENDS;
+        write_client(client->sock, "Privacy set to friends only.\n");
+    } else if (strncmp(message, " public", 7) == 0) {
+        client->privacy = PUBLIC;
+        write_client(client->sock, "Privacy set to public.\n");
+    } else {
+        write_client(client->sock, "Usage: privacy <private/friends/public>\n");
+    }
+}
+
+const char* privacyToString(enum Privacy privacy) {
+    switch (privacy) {
+        case PRIVATE:
+            return "PRIVATE";
+        case FRIENDS:
+            return "FRIENDS";
+        case PUBLIC:
+            return "PUBLIC";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+
 static int isNameTaken(const char* name) {
     for(int i = 0; i < context->actualClients; i++) {
         if(strcmp(context->clients[i].name, name) == 0) {
@@ -597,6 +666,7 @@ static void handleNewConnection(){
     c.inGameOpponent = -1;
     c.friendCount = 0;
     c.friendRequestBy = -1;
+    c.privacy = PUBLIC;
 
     context->clients[context->actualClients] = c;
     context->actualClients++;
@@ -632,15 +702,11 @@ void processClientMessage(Client* client, const char* message) {
         //TODO : implement biography : read others and write your own
     }
     else if (strcmp(message, "friends") == 0) {
-        //TODO : implement friends : list friends
         listFriends(client);
-        //write_client(client->sock, "Friends not implemented yet.\n");
     }
     else if(strncmp(message, "friend", 6) == 0) {
-        // TODO : Implement add and remove friend
         char * friendName = message + 7;
         addFriend(client, friendName);
-        //write_client(client->sock, "Friend not implemented yet.\n");
     }
     else if(strncmp(message, "unfriend", 8) == 0) {
         char * friendName = message + 9;
@@ -648,7 +714,9 @@ void processClientMessage(Client* client, const char* message) {
     }
     else if(strncmp(message, "privacy", 7) == 0) {
         //TODO : implement privacy : set privacy private or public, then change for spectators
-        write_client(client->sock, "Privacy not implemented yet.\n");
+        char* privacy = message + 7;
+        handlePrivacy(client, privacy);
+        //write_client(client->sock, "Privacy not implemented yet.\n");
     }
     else if (strncmp(message, "help", 4) == 0) {
         handleHelp(client);
