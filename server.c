@@ -271,6 +271,8 @@ void handleChatMessage(Client* client, const char* message) {
         send_message_to_all_clients(context->clients, *client, context->actualClients, message + 4, 0);
     } else if(client->challengedBy != -1) {
         handleChallengeResponse(client, message);
+    } else if(client->friendRequestBy != 0) {
+        friendResponse(client, message);
     }
 }
 
@@ -421,6 +423,62 @@ static void handleBiography(Client* client, const char* message) {
     write_client(client->sock, "Biography not implemented yet.\n");
 }
 
+static void addFriend(Client* client, const char* friendName) {
+    for (int j = 0; j < context->actualClients; j++) {
+        if (strcmp(context->clients[j].name, friendName) == 0) {
+            if (client->friendCount >= MAX_FRIENDS) {
+                write_client(client->sock, "Your friend list is full.\n");
+                break;
+            }
+            
+            char confirmationMessage[BUF_SIZE];
+            snprintf(confirmationMessage, sizeof(confirmationMessage), "Friend request sent to %s\n", context->clients[j].name);
+            write_client(client->sock, confirmationMessage);
+
+            char message[BUF_SIZE];
+            snprintf(message, sizeof(message), "%s sent you a friend request. Do you accept? (accept/reject)\n", client->name);
+            write_client(context->clients[j].sock, message);
+
+            // Enregistrez l'index de l'autre client dans les champs friendRequestBy
+            context->clients[j].friendRequestBy = client - context->clients;
+            client->friendRequestBy = j;
+
+            break;
+        }
+    }
+}
+
+void friendResponse(Client* client, const char* response) {
+    if (strcmp(response, "accept") == 0) {
+        // Copie le nom du client qui a envoyé la demande dans la liste d'amis
+        strncpy(client->friendList[client->friendCount], context->clients[client->friendRequestBy].name, BUF_SIZE - 1);
+        client->friendCount++;
+        write_client(client->sock, "Friend added.\n");
+
+        // Copie le nom du client qui a accepté dans la liste d'amis de l'autre client
+        Client *friend = &context->clients[client->friendRequestBy];
+        strncpy(friend->friendList[friend->friendCount], client->name, BUF_SIZE - 1);
+        friend->friendCount++;
+
+        write_client(friend->sock, "Friend added.\n");
+    }
+    else if (strcmp(response, "reject") == 0) {
+        write_client(client->sock, "Friend request declined.\n");
+        client->friendRequestBy = -1;
+        context->clients[client->friendRequestBy].friendRequestBy = -1;
+    }
+}
+
+
+static void listFriends(Client* client) {
+    write_client(client->sock, "Friends:\n");
+    for (int i = 0; i < client->friendCount; i++) {
+        write_client(client->sock, client->friendList[i]);
+    }
+}
+
+
+
 static int isNameTaken(const char* name) {
     for(int i = 0; i < context->actualClients; i++) {
         if(strcmp(context->clients[i].name, name) == 0) {
@@ -462,6 +520,8 @@ static void handleNewConnection(){
     c.biography[0] = 0;
     c.challengedBy = -1;
     c.inGameOpponent = -1;
+    c.friendCount = 0;
+    c.friendRequestBy = -1;
 
     context->clients[context->actualClients] = c;
     context->actualClients++;
@@ -496,9 +556,16 @@ void processClientMessage(Client* client, const char* message) {
         handleBiography(client, message + 10);
         //TODO : implement biography : read others and write your own
     }
+    else if (strcmp(message, "friends") == 0) {
+        //TODO : implement friends : list friends
+        listFriends(client);
+        //write_client(client->sock, "Friends not implemented yet.\n");
+    }
     else if(strncmp(message, "friend", 6) == 0) {
         // TODO : Implement add and remove friend
-        write_client(client->sock, "Friend not implemented yet.\n");
+        char * friendName = message + 7;
+        addFriend(client, friendName);
+        //write_client(client->sock, "Friend not implemented yet.\n");
     }
     else if(strncmp(message, "unfriend", 8) == 0) {
         write_client(client->sock, "Unfriend not implemented yet.\n");

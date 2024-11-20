@@ -23,6 +23,7 @@ typedef struct
    enum Privacy privacy;
    char friendList[MAX_FRIENDS][BUF_SIZE];
    int friendCount;
+   int friendRequestBy;
 }Client;
 
 #endif /* guard */
