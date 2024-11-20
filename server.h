@@ -95,5 +95,11 @@ static void startGame(int sessionId, Client* client1, Client* client2);
 static void checkGameTimeouts(void);
 static void removeSpectatorFromGame(int sessionId, Client* spectator);
 static int addSpectatorToGame(int sessionId, Client* spectator);
+const char* privacyToString(enum Privacy privacy);
+static void addFriend(Client* client, const char* friendName);
+static void friendResponse(Client* client, const char* response);
+static void listFriends(Client* client);
+static void unfriend(Client* client, const char* friendName);
+static void handlePrivacy(Client* client, const char* privacy);
 
 #endif /* SERVER_H */
