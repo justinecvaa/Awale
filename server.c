@@ -7,6 +7,7 @@
 #include "client2.h"
 #include "awale.h"
 #include <sys/select.h>
+#include "awale_save.h"
 
 static ServerContext* context;
 
@@ -242,6 +243,24 @@ void handleClientDisconnect(int clientIndex) {
     remove_client(context->clients, clientIndex, &context->actualClients);
 }
 
+void handleSaveCommand(Client* client, const char* message, AwaleGame *game) 
+{
+    if (message == NULL || strlen(message) == 0)
+    {
+        write_client(client->sock, "Usage: save <save_name>\n");
+        return;
+    }
+    if (saveGame(game, message+1, game->playerNames[0], game->playerNames[1]))
+    {
+        write_client(client->sock, "Game saved successfully!\n"); //TODO : pourquoi ça save pas???????????????
+    }
+    else
+    {
+        write_client(client->sock, "Failed to save game.\n");
+    }
+}
+
+
 // Gérer un coup reçu d'un client
 static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     GameSession* session = &context->gameSessions[sessionId];
@@ -252,8 +271,8 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 
     if (strncmp(buffer, "save", 4) == 0) {
         // Sauvegarder la partie
-        saveGame(&session->game); //TODO : correct that (maybe handleSaveCommand)
-        write_client(client->sock, "Game saved.\n");
+        handleSaveCommand(currentPlayer, buffer + 4, &session->game);
+        //write_client(client->sock, "Game saved.\n");
         return;
     }
 
@@ -313,7 +332,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 // Fonction pour gérer les messages de jeu ou de chat
 void handleGameOrChat(Client* client, const char* message) {
     int gameSession = findClientGameSession(client);
-    if(gameSession != -1 && strncmp(message, "all ", 4) != 0 && strncmp(message, "private ", 8) != 0) { //TODO : pouvoir accepter les friends
+    if(gameSession != -1 && strncmp(message, "all ", 4) != 0 && strncmp(message, "private ", 8) != 0 && strncmp(message, "accept", 6) != 0 && strncmp(message, "reject", 6) != 0) {
         handleGameMove(gameSession, client, message);                         //TODO add something to save all moves in a game to watch it later
     } else {
         handleChatMessage(client, message);

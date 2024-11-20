@@ -244,7 +244,7 @@ void listSaves(void)
 #endif
 }
 
-void handleSaveCommand(AwaleGame *game)
+/*void handleSaveCommand(AwaleGame *game)
 {
     char saveName[64];
     char player1Name[32];
@@ -273,7 +273,7 @@ void handleSaveCommand(AwaleGame *game)
     {
         printf("Failed to save game.\n");
     }
-}
+}*/
 
 void handleLoadCommand(AwaleGame *game)
 {
