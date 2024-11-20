@@ -116,31 +116,65 @@ static int createGameSession(Client* player1, Client* player2) {
 }
 
 // Fonction pour gérer un défi
-void handleChallenge(Client* client, const char* challengedName) {    
+void handleChallenge(Client* client, const char* challengedName) {
+    if (!challengedName || strlen(challengedName) == 0) {
+        write_client(client->sock, "Usage: challenge <player_name>\n");
+        return;
+    }
+
+    // Vérifier qu'on ne se défie pas soi-même
+    if (strcmp(client->name, challengedName) == 0) {
+        write_client(client->sock, "You cannot challenge yourself.\n");
+        return;
+    }
+
+    // Vérifier si le client est déjà en jeu
+    if (client->inGameOpponent != -1) {
+        write_client(client->sock, "You are already in a game.\n");
+        return;
+    }
+
+    // Vérifier si le client est déjà en attente d'un défi
+    if (client->challengedBy != -1) {
+        write_client(client->sock, "You already have a challenge request.\n");
+        return;
+    }
+
+    bool found = false;
     for(int j = 0; j < context->actualClients; j++) {
         if(strcmp(context->clients[j].name, challengedName) == 0) {
+            found = true;
             if (context->clients[j].challengedBy != -1) {
-                write_client(client->sock, "Client is already challenged by someone else. Wait a bit until they answer\n");
-                break;
+                write_client(client->sock, "This player is already challenged by someone else.\n");
+                return;
             }
             if (context->clients[j].inGameOpponent != -1) {
-                write_client(client->sock, "Client is already in a game. Wait until they finish\n");
-                break;
+                write_client(client->sock, "This player is already in a game.\n");
+                return;
             }
             
             char confirmationMessage[BUF_SIZE];
-            snprintf(confirmationMessage, sizeof(confirmationMessage), "Challenge sent to %s\n", context->clients[j].name);
+            snprintf(confirmationMessage, sizeof(confirmationMessage), 
+                    "Challenge sent to %s\n", challengedName);
             write_client(client->sock, confirmationMessage);
 
-            char message[BUF_SIZE];
-            snprintf(message, sizeof(message), "You have been challenged by %s. Do you accept? (accept/reject)\n", client->name);
-            write_client(context->clients[j].sock, message);
+            char challengeMessage[BUF_SIZE];
+            snprintf(challengeMessage, sizeof(challengeMessage), 
+                    "You have been challenged by %s. Do you accept? (accept/reject)\n", 
+                    client->name);
+            write_client(context->clients[j].sock, challengeMessage);
 
             int clientIndex = client - context->clients;
-            client->challengedBy = j;
             context->clients[j].challengedBy = clientIndex;
+            client->challengedBy = j;
             break;
         }
+    }
+
+    if (!found) {
+        char errorMsg[BUF_SIZE];
+        snprintf(errorMsg, sizeof(errorMsg), "Player '%s' not found.\n", challengedName);
+        write_client(client->sock, errorMsg);
     }
 }
 
@@ -276,29 +310,68 @@ void handleChatMessage(Client* client, const char* message) {
     }
 }
 
-// Fonction pour gérer les messages privés
 void handlePrivateMessage(Client* client, const char* message) {
-    char *dest_name = strtok(strdup(message), " ");
-    char *private_message = strtok(NULL, "");
-
-    if (dest_name && private_message) {
-        int found = 0;
-        for (int j = 0; j < context->actualClients; j++) {
-            if (strcmp(context->clients[j].name, dest_name) == 0) {
-                char formattedMessage[BUF_SIZE];
-                snprintf(formattedMessage, sizeof(formattedMessage), "[Private] %s: %s", client->name, private_message);
-                write_client(context->clients[j].sock, formattedMessage);
-                found = 1;
-                break;
-            }
-        }
-        if (!found) {
-            write_client(client->sock, "Client not found.\n");
-        }
-    } else {
+    // Vérifier si le message est vide
+    if (!message || strlen(message) == 0) {
         write_client(client->sock, "Usage: private <client_name> <message>\n");
+        return;
     }
-    free(dest_name);
+
+    char buffer[BUF_SIZE];
+    strncpy(buffer, message, BUF_SIZE - 1);
+    buffer[BUF_SIZE - 1] = '\0';
+
+    // Extraire le nom du destinataire
+    char* dest_name = strtok(buffer, " ");
+    if (!dest_name) {
+        write_client(client->sock, "Usage: private <client_name> <message>\n");
+        return;
+    }
+
+    if (strcmp(dest_name, client->name) == 0) {
+        write_client(client->sock, "You cannot send a private message to yourself.\n");
+        return;
+    }  
+
+    // Extraire le message - on utilise strtok(NULL, "") pour obtenir le reste de la chaîne
+    char* private_message = strtok(NULL, "");
+    if (!private_message) {
+        write_client(client->sock, "Usage: private <client_name> <message>\n");
+        return;
+    }
+
+    // Ignorer les espaces au début du message
+    while (*private_message == ' ') {
+        private_message++;
+    }
+
+    // Vérifier si le message est vide après avoir enlevé les espaces
+    if (strlen(private_message) == 0) {
+        write_client(client->sock, "Usage: private <client_name> <message>\n");
+        return;
+    }
+
+    // Chercher le destinataire
+    int found = 0;
+    for (int j = 0; j < context->actualClients; j++) {
+        if (strcmp(context->clients[j].name, dest_name) == 0) {
+            char formattedMessage[BUF_SIZE];
+            
+            // Confirmation au sender
+            snprintf(formattedMessage, sizeof(formattedMessage), 
+                    "[Private to %s] %s\n", dest_name, private_message);
+            write_client(client->sock, formattedMessage);
+            
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        char errorMsg[BUF_SIZE];
+        snprintf(errorMsg, sizeof(errorMsg), "Client '%s' not found.\n", dest_name);
+        write_client(client->sock, errorMsg);
+    }
 }
 
 // Fonction pour gérer les réponses aux défis
@@ -385,104 +458,181 @@ static int addSpectatorToGame(int sessionId, Client* spectator) {
 }
 
 static void handleBiography(Client* client, const char* message) {
+    // Pour écrire sa propre biographie
     if (strncmp(message, "write", 5) == 0) {
-        strncpy(client->biography, message + 6, BUF_SIZE - 1);
-        write_client(client->sock, "Biography updated.\n");
-    } else if (strncmp(message, "read", 4) == 0) {
-
-        message += 4;
-        if (strlen(message) == 0) {
-            write_client(client->sock, "Your biography:\n");
-            write_client(client->sock, client->biography);
-        } else {
-            message++;  // Sauter l'espace
-            char * clientName = strtok(strdup(message), "\n");
-            char * response;
-            for (int i = 0; i < context->actualClients; i++) {
-                if (strcmp(context->clients[i].name, message) == 0) {
-                    response = "Biography of ";
-                    strncat(response, clientName, BUF_SIZE - strlen(response) - 1);
-                    strncat(response, ":\n", BUF_SIZE - strlen(response) - 1);
-                    strncat(response, context->clients[i].biography, BUF_SIZE - strlen(response) - 1);
-                    write_client(client->sock, response);
-                    return;
-                    //TODO : deviner pourquoi ça marche pas mais read soi meme marche
-                    // Ya a peu pres le meme bug a d'autres endroits donc go corriger la bas aussi
-                
-                }
-            }
-            write_client(client->sock, "Client not found.\n");
+        if (strlen(message) <= 6) {
+            write_client(client->sock, "Usage: biography write <your biography text>\n");
+            return;
         }
+        // Copier le message en sautant "write " (6 caractères)
+        strncpy(client->biography, message + 6, BUF_SIZE - 1);
+        client->biography[BUF_SIZE - 1] = '\0';  // Assurer la terminaison
+        write_client(client->sock, "Biography updated.\n");
+    } 
+    // Pour lire une biographie
+    else if (strncmp(message, "read", 4) == 0) {
+        char response[BUF_SIZE];
+        response[0] = '\0';
+
+        // Si pas de nom spécifié, lire sa propre biographie
+        if (strlen(message) <= 5) {
+            snprintf(response, BUF_SIZE, "Your biography:\n%s\n", 
+                    (client->biography[0] != '\0') ? client->biography : "No biography set.");
+            write_client(client->sock, response);
+            return;
+        }
+
+        // Extraire le nom du client dont on veut lire la biographie
+        // Sauter "read " (5 caractères) et enlever les espaces au début
+        const char* targetName = message + 5;
+        while (*targetName == ' ') targetName++;
+        
+        // Chercher le client ciblé
+        for (int i = 0; i < context->actualClients; i++) {
+            if (strcmp(context->clients[i].name, targetName) == 0) {
+                snprintf(response, BUF_SIZE, "Biography of %s:\n%s\n", 
+                        context->clients[i].name,
+                        (context->clients[i].biography[0] != '\0') ? 
+                            context->clients[i].biography : "No biography set.");
+                write_client(client->sock, response);
+                return;
+            }
+        }
+        
+        snprintf(response, BUF_SIZE, "Client '%s' not found.\n", targetName);
+        write_client(client->sock, response);
     }
-    // TODO : Implement biography
-    write_client(client->sock, "Biography not implemented yet.\n");
+    else {
+        write_client(client->sock, "Usage: biography write <text> OR biography read [name]\n");
+    }
 }
 
 static void addFriend(Client* client, const char* friendName) {
-    // Vérifiez si l'ami est déjà dans la liste
+    if (!friendName || strlen(friendName) == 0) {
+        write_client(client->sock, "Usage: friend <player_name>\n");
+        return;
+    }
+
+    // Vérifier qu'on ne s'ajoute pas soi-même
+    if (strcmp(client->name, friendName) == 0) {
+        write_client(client->sock, "You cannot add yourself as a friend.\n");
+        return;
+    }
+
+    // Vérifier si l'ami est déjà dans la liste
     for (int i = 0; i < client->friendCount; i++) {
         if (strcmp(client->friendList[i], friendName) == 0) {
-            write_client(client->sock, "Friend already added.\n");
-            return;  // Si l'ami est déjà dans la liste, arrêtez la fonction
+            write_client(client->sock, "This player is already in your friend list.\n");
+            return;
         }
     }
 
+    bool found = false;
     for (int j = 0; j < context->actualClients; j++) {
         if (strcmp(context->clients[j].name, friendName) == 0) {
+            found = true;
             if (client->friendCount >= MAX_FRIENDS) {
                 write_client(client->sock, "Your friend list is full.\n");
-                break;
+                return;
             }
             
+            if (context->clients[j].friendRequestBy != -1) {
+                write_client(client->sock, "This player already has a pending friend request.\n");
+                return;
+            }
+
             char confirmationMessage[BUF_SIZE];
-            snprintf(confirmationMessage, sizeof(confirmationMessage), "Friend request sent to %s\n", context->clients[j].name);
+            snprintf(confirmationMessage, sizeof(confirmationMessage), 
+                    "Friend request sent to %s\n", friendName);
             write_client(client->sock, confirmationMessage);
 
-            char message[BUF_SIZE];
-            snprintf(message, sizeof(message), "%s sent you a friend request. Do you accept? (accept/reject)\n", client->name);
-            write_client(context->clients[j].sock, message);
+            char requestMessage[BUF_SIZE];
+            snprintf(requestMessage, sizeof(requestMessage), 
+                    "%s sent you a friend request. Do you accept? (accept/reject)\n", 
+                    client->name);
+            write_client(context->clients[j].sock, requestMessage);
 
-            // Enregistrez l'index de l'autre client dans les champs friendRequestBy
             context->clients[j].friendRequestBy = client - context->clients;
             client->friendRequestBy = j;
-
             break;
         }
+    }
+
+    if (!found) {
+        char errorMsg[BUF_SIZE];
+        snprintf(errorMsg, sizeof(errorMsg), "Player '%s' not found.\n", friendName);
+        write_client(client->sock, errorMsg);
     }
 }
 
 void friendResponse(Client* client, const char* response) {
+    if (!response || client->friendRequestBy == -1) {
+        return;
+    }
+
     if (strcmp(response, "accept") == 0) {
-        // Copie le nom du client qui a envoyé la demande dans la liste d'amis
-        strncpy(client->friendList[client->friendCount], context->clients[client->friendRequestBy].name, BUF_SIZE - 1);
-        client->friendCount++;
-        char confirmationMessage[BUF_SIZE];
-        sprintf(confirmationMessage, "Friend %s added to your friend list.\n", context->clients[client->friendRequestBy].name);
-        write_client(client->sock, confirmationMessage);
+        Client* requester = &context->clients[client->friendRequestBy];
+        if (client->friendCount >= MAX_FRIENDS || requester->friendCount >= MAX_FRIENDS) {
+            write_client(client->sock, "Friend list is full.\n");
+            write_client(requester->sock, "Friend list is full.\n");
+        } else {
+            // Ajouter à la liste d'amis du receveur
+            strncpy(client->friendList[client->friendCount], requester->name, BUF_SIZE - 1);
+            client->friendList[client->friendCount][BUF_SIZE - 1] = '\0';
+            client->friendCount++;
 
-        // Copie le nom du client qui a accepté dans la liste d'amis de l'autre client
-        Client *friend = &context->clients[client->friendRequestBy];
-        strncpy(friend->friendList[friend->friendCount], client->name, BUF_SIZE - 1);
-        friend->friendCount++;
+            // Ajouter à la liste d'amis du demandeur
+            strncpy(requester->friendList[requester->friendCount], client->name, BUF_SIZE - 1);
+            requester->friendList[requester->friendCount][BUF_SIZE - 1] = '\0';
+            requester->friendCount++;
 
-        char confirmationMessage2[BUF_SIZE];
-        sprintf(confirmationMessage2, "Friend %s added to your friend list.\n", client->name);
-        write_client(friend->sock, confirmationMessage2);
-        client->friendRequestBy = -1;
-        friend->friendRequestBy = -1;
+            char confirmMsg1[BUF_SIZE], confirmMsg2[BUF_SIZE];
+            snprintf(confirmMsg1, sizeof(confirmMsg1), "Friend %s added to your friend list.\n", 
+                    requester->name);
+            snprintf(confirmMsg2, sizeof(confirmMsg2), "Friend %s added to your friend list.\n", 
+                    client->name);
+            
+            write_client(client->sock, confirmMsg1);
+            write_client(requester->sock, confirmMsg2);
+        }
     }
     else if (strcmp(response, "reject") == 0) {
+        if (client->friendRequestBy >= 0 && client->friendRequestBy < context->actualClients) {
+            write_client(context->clients[client->friendRequestBy].sock, 
+                        "Friend request declined.\n");
+        }
         write_client(client->sock, "Friend request declined.\n");
-        client->friendRequestBy = -1;
+    }
+
+    // Réinitialiser les états de demande d'ami
+    if (client->friendRequestBy >= 0 && client->friendRequestBy < context->actualClients) {
         context->clients[client->friendRequestBy].friendRequestBy = -1;
     }
+    client->friendRequestBy = -1;
 }
 
-
 static void listFriends(Client* client) {
-    write_client(client->sock, "Friends:\n");
+    if (client->friendCount == 0) {
+        write_client(client->sock, "You have no friends in your list.\n");
+        return;
+    }
+
+    write_client(client->sock, "Friends list:\n");
     for (int i = 0; i < client->friendCount; i++) {
-        write_client(client->sock, client->friendList[i]);
+        char friendStatus[BUF_SIZE];
+        bool isOnline = false;
+        
+        // Vérifier si l'ami est en ligne
+        for (int j = 0; j < context->actualClients; j++) {
+            if (strcmp(context->clients[j].name, client->friendList[i]) == 0) {
+                isOnline = true;
+                break;
+            }
+        }
+
+        snprintf(friendStatus, sizeof(friendStatus), "- %s (%s)\n", 
+                client->friendList[i], isOnline ? "online" : "offline");
+        write_client(client->sock, friendStatus);
     }
 }
 
