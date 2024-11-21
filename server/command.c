@@ -83,6 +83,10 @@ void processClientMessage(Client* client, const char* message, ServerContext* co
         snprintf(eloMessage, sizeof(eloMessage), "Your ELO rating: %d\n", client->elo);
         write_client(client->sock, eloMessage);
     }
+    else if(strncmp(message, "re", 2) == 0){
+        char * response = message + 3;
+        handleAnswer(client, response, context);
+    }
     else {
         handleGameOrChat(client, message, context);
     }
@@ -309,6 +313,8 @@ void handlePrivateMessage(Client* client, const char* message, ServerContext* co
     for (int j = 0; j < context->actualClients; j++) {
         if (strcmp(context->clients[j].name, dest_name) == 0) {
             char formattedMessage[BUF_SIZE];
+            client->lastInterlocutorIndex = j;
+            context->clients[j].lastInterlocutorIndex = client - context->clients;
 
             // Confirmation au sender
             snprintf(formattedMessage, sizeof(formattedMessage), 
@@ -748,29 +754,30 @@ void handlePrivacy(Client* client, const char* message, ServerContext* context) 
 
 // Fonction pour gérer le message d'aide -- command
 void handleHelp(Client* client) {
-    write_client(client->sock, "Available commands:\n");
-    write_client(client->sock, "list: List all connected clients\n");
-    write_client(client->sock, "games: List all active games\n");
-    write_client(client->sock, "challenge <name>: Challenge another client to a game\n");
-    write_client(client->sock, "watch <player1> <player2>: Watch a game between two players\n");
-    write_client(client->sock, "unwatch: Stop watching a game\n");
-    write_client(client->sock, "biography: Read your biography\n");
-    write_client(client->sock, "biography write <biography>: Write your biography\n");
-    write_client(client->sock, "biography read <name>: Read the biography of another client\n");
-    write_client(client->sock, "friends: List your friends\n");
-    write_client(client->sock, "friend <name>: Add a friend\n");
-    write_client(client->sock, "unfriend <name>: Remove a friend\n");
-    write_client(client->sock, "privacy <private/friends/public>: Set your privacy settings\n");
-    write_client(client->sock, "privacy: View your privacy settings\n");
-    write_client(client->sock, "all <message>: Send a message to all clients\n");
-    write_client(client->sock, "private <name> <message>: Send a private message to a client\n");
-    write_client(client->sock, "help: Display this help message\n");
-    write_client(client->sock, "quit: Exit a game\n");
-    write_client(client->sock, "save state <save_name>: Save the state of the game\n");
-    write_client(client->sock, "save game <save_name>: Save the game\n");
-    write_client(client->sock, "load <save_name>: Load a game\n");
-    write_client(client->sock, "list saves: List all saved games\n");
-    write_client(client->sock, "elo: View your ELO rating\n");
+    write_client(client->sock, "Available commands:");
+    write_client(client->sock, "list: List all connected clients");
+    write_client(client->sock, "games: List all active games");
+    write_client(client->sock, "challenge <name>: Challenge another client to a game");
+    write_client(client->sock, "watch <player1> <player2>: Watch a game between two players");
+    write_client(client->sock, "unwatch: Stop watching a game");
+    write_client(client->sock, "biography: Read your biography");
+    write_client(client->sock, "biography write <biography>: Write your biography");
+    write_client(client->sock, "biography read <name>: Read the biography of another client");
+    write_client(client->sock, "friends: List your friends");
+    write_client(client->sock, "friend <name>: Add a friend");
+    write_client(client->sock, "unfriend <name>: Remove a friend");
+    write_client(client->sock, "privacy <private/friends/public>: Set your privacy settings");
+    write_client(client->sock, "privacy: View your privacy settings");
+    write_client(client->sock, "all <message>: Send a message to all clients");
+    write_client(client->sock, "private <name> <message>: Send a private message to a client");
+    write_client(client->sock, "re <message>: Send a message to the last person you talked to");
+    write_client(client->sock, "help: Display this help message");
+    write_client(client->sock, "quit: Exit a game");
+    write_client(client->sock, "save state <save_name>: Save the state of the game");
+    write_client(client->sock, "save game <save_name>: Save the game");
+    write_client(client->sock, "load <save_name>: Load a game");
+    write_client(client->sock, "list saves: List all saved games");
+    write_client(client->sock, "elo: View your ELO rating");
 }
 
 // Fonction pour gérer les déconnexions volontaires -- command
@@ -855,6 +862,7 @@ void handleNewConnection(ServerContext* context){
     c.friendRequestBy = -1;
     c.privacy = PUBLIC;
     c.elo = 1000;
+    c.lastInterlocutorIndex = -1;
 
     context->clients[context->actualClients] = c;
     context->actualClients++;
@@ -903,6 +911,38 @@ void handleGameOver(GameSession* session) {
     write_client(session->player1->sock, message);
     write_client(session->player2->sock, message);
     session->isActive = 0;
+}
+
+// Fonction qui gère la réponse à un message privé
+void handleAnswer(Client* client, const char* response, ServerContext* context) {
+    // Vérifier si le message est vide
+    if (!response || strlen(response) == 0) {
+        write_client(client->sock, "Usage: re <message>\n");
+        return;
+    }
+    
+    
+    if(client->lastInterlocutorIndex == -1) {
+        write_client(client->sock, "No private message to answer to.\n");
+        return;
+    }
+    Client* receiver = &context->clients[client->lastInterlocutorIndex];
+    if (receiver->sock == INVALID_SOCKET) {
+        write_client(client->sock, "The user is no longer connected.\n");
+        return;
+    }
+    //send it to the receiver
+    char formattedMessage[BUF_SIZE];
+
+    // Confirmation au sender
+    snprintf(formattedMessage, sizeof(formattedMessage), 
+            "[Private to %s] %s\n", receiver->name, response);
+    write_client(client->sock, formattedMessage);
+
+    // Envoi du message au destinataire
+    snprintf(formattedMessage, sizeof(formattedMessage), 
+            "[Private from %s] %s\n", client->name, response);
+    write_client(receiver->sock, formattedMessage);
 }
 
 
