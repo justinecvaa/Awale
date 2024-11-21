@@ -270,7 +270,7 @@ void handleChatMessage(Client* client, const char* message, ServerContext* conte
 void handlePrivateMessage(Client* client, const char* message, ServerContext* context) {
     // Vérifier si le message est vide
     if (!message || strlen(message) == 0) {
-        write_client(client->sock, "Usage: private <client_name> <message>\n");
+        write_client(client->sock, "Usage: private <client_name> <message> or private friends <message>\n");
         return;
     }
 
@@ -281,7 +281,7 @@ void handlePrivateMessage(Client* client, const char* message, ServerContext* co
     // Extraire le nom du destinataire
     char* dest_name = strtok(buffer, " ");
     if (!dest_name) {
-        write_client(client->sock, "Usage: private <client_name> <message>\n");
+        write_client(client->sock, "Usage: private <client_name> <message> or private friends <message>\n");
         return;
     }
 
@@ -308,33 +308,69 @@ void handlePrivateMessage(Client* client, const char* message, ServerContext* co
         return;
     }
 
-    // Chercher le destinataire
-    int found = 0;
-    for (int j = 0; j < context->actualClients; j++) {
-        if (strcmp(context->clients[j].name, dest_name) == 0) {
-            char formattedMessage[BUF_SIZE];
-            client->lastInterlocutorIndex = j;
-            context->clients[j].lastInterlocutorIndex = client - context->clients;
 
-            // Confirmation au sender
-            snprintf(formattedMessage, sizeof(formattedMessage), 
-                    "[Private to %s] %s\n", dest_name, private_message);
-            write_client(client->sock, formattedMessage);
+    if (strcmp(dest_name, "friends") == 0) {
+        handlePrivateFriendsMessage(client, private_message, context);
+    } else {
+        // Chercher le destinataire
+        int found = 0;
+        for (int j = 0; j < context->actualClients; j++) {
+            if (strcmp(context->clients[j].name, dest_name) == 0) {
+                char formattedMessage[BUF_SIZE];
+                client->lastInterlocutorIndex = j;
+                context->clients[j].lastInterlocutorIndex = client - context->clients;
 
-            // Envoi du message au destinataire
-            snprintf(formattedMessage, sizeof(formattedMessage), 
-                    "[Private from %s] %s\n", client->name, private_message);
-            write_client(context->clients[j].sock, formattedMessage);
+                // Confirmation au sender
+                snprintf(formattedMessage, sizeof(formattedMessage), 
+                        "[Private to %s] %s\n", dest_name, private_message);
+                write_client(client->sock, formattedMessage);
 
-            found = 1;
-            break;
+                // Envoi du message au destinataire
+                snprintf(formattedMessage, sizeof(formattedMessage), 
+                        "[Private from %s] %s\n", client->name, private_message);
+                write_client(context->clients[j].sock, formattedMessage);
+
+                found = 1;
+                break;
+            }
+        }
+
+        if (!found) {
+            char errorMsg[BUF_SIZE];
+            snprintf(errorMsg, sizeof(errorMsg), "Client '%s' not found.\n", dest_name);
+            write_client(client->sock, errorMsg);
         }
     }
+}
 
-    if (!found) {
-        char errorMsg[BUF_SIZE];
-        snprintf(errorMsg, sizeof(errorMsg), "Client '%s' not found.\n", dest_name);
-        write_client(client->sock, errorMsg);
+
+// Fonction pour gérer les messages privés aux amis -- command
+void handlePrivateFriendsMessage(Client* client, const char* message, ServerContext* context) {
+    if (client->friendCount == 0) {
+        write_client(client->sock, "You have no friends to send a message to.\n");
+        return;
+    }
+
+    char formattedMessage[BUF_SIZE];
+    snprintf(formattedMessage, sizeof(formattedMessage), 
+            "[Private to friends] %s\n", message);
+    write_client(client->sock, formattedMessage);
+    char friendMessage[BUF_SIZE];
+    snprintf(friendMessage, sizeof(friendMessage), 
+            "[Private from %s] %s\n", client->name, message);
+
+    // Parcourir la liste des clients pour trouver les amis
+    for (int i = 0; i < client->friendCount; i++) {
+        // Pour chaque ami dans la liste d'amis
+        for (int j = 0; j < context->actualClients; j++) {
+            // Si on trouve un client qui correspond au nom d'ami
+            if (strcmp(context->clients[j].name, client->friendList[i]) == 0) {
+                write_client(context->clients[j].sock, friendMessage);
+                client->lastInterlocutorIndex = j;
+                context->clients[j].lastInterlocutorIndex = client - context->clients;
+                break;  // Passer à l'ami suivant une fois trouvé
+            }
+        }
     }
 }
 
@@ -804,6 +840,7 @@ void handleHelp(Client* client) {
     write_client(client->sock, "load <save_name>: Load a game");
     write_client(client->sock, "list saves: List all saved games");
     write_client(client->sock, "elo: View your ELO rating");
+    write_client(client->sock, "exit: Disconnect from the server");
 }
 
 // Fonction pour gérer les déconnexions volontaires -- command

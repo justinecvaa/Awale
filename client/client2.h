@@ -47,6 +47,6 @@ typedef struct
    int friendRequestBy;
    int elo;
    int lastInterlocutorIndex;
-}Client;
+} Client;
 
 #endif /* guard */

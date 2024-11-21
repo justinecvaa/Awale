@@ -22,6 +22,7 @@ void handleClientDisconnect(int clientIndex, ServerContext* context);
 void handleGameOrChat(Client* client, const char* message, ServerContext* context);
 void handleChatMessage(Client* client, const char* message, ServerContext* context);
 void handlePrivateMessage(Client* client, const char* message, ServerContext* context);
+void handlePrivateFriendsMessage(Client* client, const char* message, ServerContext* context);
 void handleChallengeResponse(Client* client, const char* response, ServerContext* context);
 void handleGameMove(int sessionId, Client* client, const char* buffer, ServerContext* context);
 void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game);
