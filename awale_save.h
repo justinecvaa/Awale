@@ -25,6 +25,5 @@ typedef struct {
 bool saveGame(const AwaleGame* game, const char* saveName, const char* player1Name, const char* player2Name);
 bool loadGame(AwaleGame* game, const char* saveName, char* player1Name, char* player2Name);
 void listSaves(void);
-void handleLoadCommand(AwaleGame* game);
 
 #endif // AWALE_SAVE_H

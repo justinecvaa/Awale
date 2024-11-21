@@ -19,6 +19,7 @@ void initializeGame(AwaleGame* game, const char* player1Name, const char* player
     game->gameOver = false;
     game->lastMove = -1;
     game->winner = -1;
+    game->turnCount = 0;
     strcpy(game->playerNames[0], player1Name);
     strcpy(game->playerNames[1], player2Name);
     strcpy(game->message, "Game started");

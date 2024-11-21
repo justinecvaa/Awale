@@ -16,6 +16,7 @@ typedef struct {
     int currentPlayer;       // Joueur actuel (0 ou 1)
     bool gameOver;           // État de fin de partie
     char message[256];       // Message pour la communication client-serveur
+    int turnCount;           // Nombre de tours joués
     int lastMove;           // Dernier coup joué
     int winner;             // Gagnant (-1: pas de gagnant, 0: joueur 1, 1: joueur 2, 2: égalité)
 } AwaleGame;

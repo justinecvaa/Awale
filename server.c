@@ -262,6 +262,32 @@ void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game
     }
 }
 
+void handleLoadCommand(GameSession* session, Client* client, const char* message){
+    if (message == NULL || strlen(message) == 0)
+    {
+        write_client(client->sock, "Usage: load <save_name>\n");
+        return;
+    }
+    write_client(session->player2->sock, "Loading game...\n");
+    write_client(session->player1->sock, "Loading game...\n");
+    if (loadGame(&session->game, message+1, session->player1->name, session->player2->name))
+    {
+        char response[BUF_SIZE];
+        snprintf(response, sizeof(response), "Game loaded successfully from '%s'\n", message+1);
+        write_client(session->player2->sock, response); 
+        write_client(session->player1->sock, response);
+
+        char serializedGame[BUF_SIZE];
+        serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+        write_client(session->player1->sock, serializedGame);
+        write_client(session->player2->sock, serializedGame);
+    }
+    else
+    {
+        write_client(client->sock, "Failed to load game.\n");
+    }
+}
+
 
 // Gérer un coup reçu d'un client
 static void handleGameMove(int sessionId, Client* client, const char* buffer) {
@@ -269,6 +295,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     
     // Vérifier si c'est bien le tour du joueur
     Client* currentPlayer = (session->currentPlayerIndex == 0) ? session->player1 : session->player2;
+    printf("turnCount : %d\n", session->game.turnCount);
 
 
     if (strncmp(buffer, "save state", 10) == 0) {
@@ -289,6 +316,20 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         return;
     }
 
+    if (strncmp(buffer, "load", 4) == 0){
+        if(session->game.turnCount > 0){
+            write_client(client->sock, "Game already started. You can't load a game now.\n");
+            return;
+        }
+        // Charger une partie
+        handleLoadCommand(session, client, buffer + 4);
+        return;
+    }
+
+    if(strncmp(buffer,"list saves", 10) == 0){
+        listSaves();
+        return;
+    }
 
     if(client != currentPlayer || !session->waitingForMove) {
         write_client(client->sock, "It's not your turn!\n");
@@ -303,6 +344,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 
     // Effectuer le coup
     if(makeMove(&session->game, house - 1)) {
+        session->game.turnCount++;
         char serializedGame[BUF_SIZE];
         serializeGame(&session->game, serializedGame, sizeof(serializedGame));
         

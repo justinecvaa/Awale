@@ -114,6 +114,7 @@ bool saveGame(const AwaleGame *game, const char *saveName, const char *player1Na
 
 bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *player2Name)
 {
+    printf("FileName: %s\n", saveName);
     char filename[128];
     snprintf(filename, sizeof(filename), "saves/%s.awale", saveName);
 
@@ -244,27 +245,3 @@ void listSaves(void)
 #endif
 }
 
-
-void handleLoadCommand(AwaleGame *game)
-{
-    listSaves();
-
-    char saveName[64];
-    char player1Name[32];
-    char player2Name[32];
-
-    printf("Enter save name to load: ");
-    scanf("%63s", saveName);
-    while (getchar() != '\n')
-        ;
-
-    if (loadGame(game, saveName, player1Name, player2Name))
-    {
-        printf("Game loaded successfully!\n");
-        printf("Players: %s vs %s\n", player1Name, player2Name);
-    }
-    else
-    {
-        printf("Failed to load game.\n");
-    }
-}
