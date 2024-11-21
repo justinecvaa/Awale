@@ -7,6 +7,7 @@
 #elif defined (linux) || defined (__linux__)
     #include <sys/types.h>
     #include <sys/socket.h>
+    #include <sys/select.h>
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <unistd.h> /* close */
@@ -27,8 +28,8 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
-#include "client2.h"
-#include "awale.h"
+#include "../client/client2.h"
+#include "../awale/awale.h"
 #include "message.h"
 
 #define CRLF        "\r\n"

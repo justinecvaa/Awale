@@ -3,12 +3,14 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
-#include <math.h>
-#include "server.h"
-#include "client2.h"
-#include "awale.h"
 #include <sys/select.h>
-#include "awale_save.h"
+#include "server.h"
+#include "command.h"
+#include "util.h"
+#include "../client/client2.h"
+#include "../awale/awale.h"
+#include "../awale/awale_save.h"
+#include "../message.h"
 
 static ServerContext* context;
 
@@ -19,16 +21,7 @@ static ServerContext* context;
 // ************************************************************************************************
 
 
-// Initialisation des sessions de jeu -- util
-static void initGameSessions(void) {
-    for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
-        context->gameSessions[i].isActive = 0;
-        context->gameSessions[i].player1 = NULL;
-        context->gameSessions[i].player2 = NULL;
-        context->gameSessions[i].spectatorCount = 0;
-        context->gameSessions[i].waitingForMove = 0;
-    }
-}
+
 
 // Fonction d'initialisation du contexte serveur -- util
 void initServerContext(SOCKET serverSocket) {

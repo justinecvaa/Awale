@@ -1,0 +1,12 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <math.h>
+#include "command.h"
+#include "util.h"
+#include "data.h"
+#include "../client/client2.h"
+#include "../awale/awale.h"
+#include "../awale/awale_save.h"
+#include "../message.h"
