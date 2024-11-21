@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 #include "server.h"
 #include "client2.h"
 #include "awale.h"
@@ -305,21 +306,6 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         return;
     }
 
-    if (strncmp(buffer, "quit", 4) == 0) {
-        // Quitter la partie
-        char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
-        session->isActive = 0;
-        char message[BUF_SIZE];
-        session->player1->inGameOpponent = -1;
-        session->player2->inGameOpponent = -1;
-        session->player1->challengedBy = -1;
-        session->player2->challengedBy = -1;
-        snprintf(message, sizeof(message), "%s left the game. %s won!\n", client->name, winner);
-        write_client(session->player1->sock, message);
-        write_client(session->player2->sock, message);
-        return;
-    }
-
     if (strncmp(buffer, "load", 4) == 0){
         if(session->game.turnCount > 0){
             write_client(client->sock, "Game already started. You can't load a game now.\n");
@@ -338,11 +324,19 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     if (strncmp(buffer, "quit", 4) == 0) {
         // Quitter la partie
         char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
+        session->game.winner = (strcmp(client->name, session->player1->name) == 0) ? 0 : 1;
         session->isActive = 0;
+        updateElo(session->player1, session->player2, session->game.winner);
         char message[BUF_SIZE];
+        session->player1->inGameOpponent = -1;
+        session->player2->inGameOpponent = -1;
+        session->player1->challengedBy = -1;
+        session->player2->challengedBy = -1;
         snprintf(message, sizeof(message), "%s left the game. %s won!\n", client->name, winner);
         write_client(session->player1->sock, message);
         write_client(session->player2->sock, message);
+
+        printUpdatedElo(session->player1, session->player2);
         return;
     }
     
@@ -382,6 +376,8 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         // Vérifier si la partie est terminée
         if(session->game.gameOver) {
             handleGameOver(session);
+            updateElo(session->player1, session->player2, session->game.winner);
+            printUpdatedElo(session->player1, session->player2);
         }
     }
 }
@@ -400,13 +396,35 @@ void handleGameOver(GameSession* session) {
     session->isActive = 0;
 }
 
+void printUpdatedElo(Client* player1, Client* player2) {
+    char message[BUF_SIZE];
+    snprintf(message, sizeof(message), "Updated ELO ratings: %s: %d\n", player1->name, player1->elo);
+    write_client(player1->sock, message);
+    snprintf(message, sizeof(message), "Updated ELO ratings: %s: %d\n", player2->name, player2->elo);
+    write_client(player2->sock, message);
+}
+
 void updateElo(Client* player1, Client* player2, int winner) {
+    // Winner is 0 if player 1 wins, 1 if player 2 wins, 2 if it's a tie
     int k = 32;
     double exponent1 = (double)(player2->elo - player1->elo) / 400;
-    double expected1 = 1 / (1 + pow(10, exponent));
-    double expected2 = 1 / (1 + pow(10, -exponent));
-    int newElo1 = player1->elo + k * (winner - expected1);
-    int newElo2 = player2->elo + k * (1 - winner - expected2);
+    double expected1 = 1 / (1 + pow(10, exponent1));
+    double expected2 = 1 / (1 + pow(10, -exponent1));
+    
+    double score1, score2;
+    if (winner == 0) {
+        score1 = 1.0;
+        score2 = 0.0;
+    } else if (winner == 1) {
+        score1 = 0.0;
+        score2 = 1.0;
+    } else {
+        score1 = 0.5;
+        score2 = 0.5;
+    }
+    
+    int newElo1 = player1->elo + k * (score1 - expected1);
+    int newElo2 = player2->elo + k * (score2 - expected2);
     player1->elo = newElo1;
     player2->elo = newElo2;
 }
