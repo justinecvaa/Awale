@@ -19,7 +19,7 @@ static ServerContext* context;
 // ************************************************************************************************
 
 
-// Initialisation des sessions de jeu
+// Initialisation des sessions de jeu -- util
 static void initGameSessions(void) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
         context->gameSessions[i].isActive = 0;
@@ -30,7 +30,7 @@ static void initGameSessions(void) {
     }
 }
 
-// Fonction d'initialisation du contexte serveur
+// Fonction d'initialisation du contexte serveur -- util
 void initServerContext(SOCKET serverSocket) {
     context = malloc(sizeof(ServerContext));
     context->serverSocket = serverSocket;
@@ -40,8 +40,8 @@ void initServerContext(SOCKET serverSocket) {
     initGameSessions();
 }
 
-// Fonction pour envoyer la liste des clients
-void sendClientList(Client* client) {
+// Fonction pour envoyer la liste des clients -- command
+void handleSendClientList(Client* client) {
     char client_list[BUF_SIZE] = "Connected clients:\n";
     for(int j = 0; j < context->actualClients; j++) {
         strncat(client_list, context->clients[j].name, BUF_SIZE - strlen(client_list) - 1);
@@ -50,8 +50,8 @@ void sendClientList(Client* client) {
     write_client(client->sock, client_list);
 }
 
-// Fonction pour envoyer la liste des parties en cours
-void sendGamesList(Client* client) {
+// Fonction pour envoyer la liste des parties en cours -- command
+void handleSendGamesList(Client* client) {
     char game_list[BUF_SIZE] = "Active games:\n";
     for (int j = 0; j < MAX_GAME_SESSIONS; j++) {
         if (context->gameSessions[j].isActive) {
@@ -126,7 +126,7 @@ static int createGameSession(Client* player1, Client* player2) {
     return sessionId;
 }
 
-// Fonction pour gérer un défi
+// Fonction pour gérer un défi -- command
 void handleChallenge(Client* client, const char* challengedName) {
     if (!challengedName || strlen(challengedName) == 0) {
         write_client(client->sock, "Usage: challenge <player_name>\n");
@@ -189,7 +189,7 @@ void handleChallenge(Client* client, const char* challengedName) {
     }
 }
 
-// Fonction pour gérer une demande de spectateur
+// Fonction pour gérer une demande de spectateur -- command
 void handleWatchRequest(Client* client, const char* request) {
     char *player1_name = strtok(strdup(request), " ");
     char *player2_name = strtok(NULL, "");
@@ -229,7 +229,7 @@ void handleWatchRequest(Client* client, const char* request) {
     free(player1_name); // Libérer la mémoire allouée par strdup
 }
 
-// Fonction pour gérer la déconnexion d'un client
+// Fonction pour gérer la déconnexion d'un client -- command
 void handleClientDisconnect(int clientIndex) {
     Client* client = &context->clients[clientIndex];
     int gameSession = findClientGameSession(client);
@@ -244,7 +244,8 @@ void handleClientDisconnect(int clientIndex) {
     remove_client(context->clients, clientIndex, &context->actualClients);
 }
 
-void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game) 
+// Fonction pour faire une sauvegarde d'une partie à un moment donné -- command
+void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game)  
 {
     if (message == NULL || strlen(message) == 0)
     {
@@ -263,6 +264,7 @@ void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game
     }
 }
 
+// Fonction pour charger une partie sauvegardée -- command
 void handleLoadCommand(GameSession* session, Client* client, const char* message){
     if (message == NULL || strlen(message) == 0)
     {
@@ -290,7 +292,7 @@ void handleLoadCommand(GameSession* session, Client* client, const char* message
 }
 
 
-// Gérer un coup reçu d'un client
+// Gérer un coup reçu d'un client -- command
 static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     GameSession* session = &context->gameSessions[sessionId];
     
@@ -382,6 +384,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     }
 }
 
+// Fonction pour gérer la fin d'une partie -- command (should be changed to util)
 void handleGameOver(GameSession* session) {
     char message[BUF_SIZE];
     if(session->game.winner == 0) {
@@ -396,6 +399,7 @@ void handleGameOver(GameSession* session) {
     session->isActive = 0;
 }
 
+// Fonction qui affiche l'elo mis à jour des joueurs -- util
 void printUpdatedElo(Client* player1, Client* player2) {
     char message[BUF_SIZE];
     snprintf(message, sizeof(message), "Updated ELO ratings: %s: %d\n", player1->name, player1->elo);
@@ -404,6 +408,7 @@ void printUpdatedElo(Client* player1, Client* player2) {
     write_client(player2->sock, message);
 }
 
+// Fonction pour mettre à jour l'elo des joueurs -- util
 void updateElo(Client* player1, Client* player2, int winner) {
     // Winner is 0 if player 1 wins, 1 if player 2 wins, 2 if it's a tie
     int k = 32;
@@ -429,7 +434,7 @@ void updateElo(Client* player1, Client* player2, int winner) {
     player2->elo = newElo2;
 }
 
-// Fonction pour gérer les messages de jeu ou de chat
+// Fonction pour gérer les messages de jeu ou de chat -- command
 void handleGameOrChat(Client* client, const char* message) {
     int gameSession = findClientGameSession(client);
     if(gameSession != -1 && strncmp(message, "all ", 4) != 0 && strncmp(message, "private ", 8) != 0 && strncmp(message, "accept", 6) != 0 && strncmp(message, "reject", 6) != 0) {
@@ -439,7 +444,7 @@ void handleGameOrChat(Client* client, const char* message) {
     }
 }
 
-// Fonction pour gérer les messages de chat
+// Fonction pour gérer les messages de chat -- command
 void handleChatMessage(Client* client, const char* message) {
     if(strncmp(message, "private ", 8) == 0) {
         handlePrivateMessage(client, message + 8);
@@ -448,10 +453,11 @@ void handleChatMessage(Client* client, const char* message) {
     } else if(client->challengedBy != -1) {
         handleChallengeResponse(client, message);
     } else if(client->friendRequestBy != 0) {
-        friendResponse(client, message);
+        handleFriendResponse(client, message);
     }
 }
 
+// Fonction pour gérer les messages privés -- command
 void handlePrivateMessage(Client* client, const char* message) {
     // Vérifier si le message est vide
     if (!message || strlen(message) == 0) {
@@ -521,7 +527,7 @@ void handlePrivateMessage(Client* client, const char* message) {
     }
 }
 
-// Fonction pour gérer les réponses aux défis
+// Fonction pour gérer les réponses aux défis --command
 void handleChallengeResponse(Client* client, const char* response) {
     if(strcmp(response, "accept") == 0) {
         int opponentIndex = client->challengedBy;
@@ -542,7 +548,7 @@ void handleChallengeResponse(Client* client, const char* response) {
     }
 }
 
-// Fonction pour démarrer une partie
+// Fonction pour démarrer une partie -- not sure
 void startGame(int sessionId, Client* client1, Client* client2) {
     GameSession* session = &context->gameSessions[sessionId];
     char serializedGame[BUF_SIZE];
@@ -563,7 +569,7 @@ void startGame(int sessionId, Client* client1, Client* client2) {
     write_client(client2->sock, serializedGame);
 }
 
-// Fonction pour vérifier les timeouts des parties
+// Fonction pour vérifier les timeouts des parties -- util
 void checkGameTimeouts() {
     time_t currentTime = time(NULL);
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
@@ -580,7 +586,7 @@ void checkGameTimeouts() {
     }
 }
 
-// Supprimer un spectateur de la session de jeu
+// Supprimer un spectateur de la session de jeu -- util
 static void removeSpectatorFromGame(int sessionId, Client* spectator) {
     GameSession* session = &(context->gameSessions[sessionId]);
     for (int i = 0; i < session->spectatorCount; i++) {
@@ -594,7 +600,7 @@ static void removeSpectatorFromGame(int sessionId, Client* spectator) {
     }
 }
 
-// Ajouter un spectateur à une session de jeu
+// Ajouter un spectateur à une session de jeu -- util
 static int addSpectatorToGame(int sessionId, Client* spectator) {
     GameSession* session = &(context->gameSessions[sessionId]);
     if(session->player1->privacy == PRIVATE || session->player2->privacy == PRIVATE) {
@@ -624,6 +630,7 @@ static int addSpectatorToGame(int sessionId, Client* spectator) {
     return 2;  // Pas d'espace pour plus de spectateurs
 }
 
+// Fonction pour gérer l'écriture ou lecture de biographie -- command
 static void handleBiography(Client* client, const char* message) {
     // Pour écrire sa propre biographie
     if (strncmp(message, "write", 5) == 0) {
@@ -674,7 +681,8 @@ static void handleBiography(Client* client, const char* message) {
     }
 }
 
-static void addFriend(Client* client, const char* friendName) {
+// Fonction pour gérer les demandes d'amis -- command 
+static void handleAddFriend(Client* client, const char* friendName) {
     if (!friendName || strlen(friendName) == 0) {
         write_client(client->sock, "Usage: friend <player_name>\n");
         return;
@@ -732,7 +740,8 @@ static void addFriend(Client* client, const char* friendName) {
     }
 }
 
-void friendResponse(Client* client, const char* response) {
+// Fonction pour gérer les réponses aux demandes d'amis -- command
+void handleFriendResponse(Client* client, const char* response) {
     if (!response || client->friendRequestBy == -1) {
         return;
     }
@@ -778,7 +787,8 @@ void friendResponse(Client* client, const char* response) {
     client->friendRequestBy = -1;
 }
 
-static void listFriends(Client* client) {
+// Fonction pour lister les amis -- command
+static void handleListFriends(Client* client) {
     if (client->friendCount == 0) {
         write_client(client->sock, "You have no friends in your list.\n");
         return;
@@ -803,8 +813,8 @@ static void listFriends(Client* client) {
     }
 }
 
-
-static void unfriend(Client* client, const char* friendName) {
+// Fonction pour gérer les demandes de suppression d'amis -- command
+static void handleUnfriend(Client* client, const char* friendName) {
     // Chercher l'ami dans la liste du client
     for (int i = 0; i < client->friendCount; i++) {
         if (strcmp(client->friendList[i], friendName) == 0) {
@@ -850,7 +860,7 @@ static void unfriend(Client* client, const char* friendName) {
     write_client(client->sock, "Friend not found.\n");
 }
 
-
+// Fonction pour gérer le message d'aide -- command
 static void handleHelp(Client* client) {
     write_client(client->sock, "Available commands:\n");
     write_client(client->sock, "list: List all connected clients\n");
@@ -874,7 +884,7 @@ static void handleHelp(Client* client) {
     write_client(client->sock, "save game <save_name>: Save the game\n");
 }
 
-
+// Fonction pour gérer la confidentialité -- command
 static void handlePrivacy(Client* client, const char* message) {
     // Si aucun message n'est passé, on affiche la confidentialité actuelle du client
     if (message == NULL || strlen(message) == 0) {
@@ -898,6 +908,7 @@ static void handlePrivacy(Client* client, const char* message) {
     }
 }
 
+// Convertir l'énumération de confidentialité en chaîne -- util
 const char* privacyToString(enum Privacy privacy) {
     switch (privacy) {
         case PRIVATE:
@@ -911,7 +922,7 @@ const char* privacyToString(enum Privacy privacy) {
     }
 }
 
-
+// Fonction pour vérifier la dispo d'un nom -- util
 static int isNameTaken(const char* name) {
     for(int i = 0; i < context->actualClients; i++) {
         if(strcmp(context->clients[i].name, name) == 0) {
@@ -921,6 +932,7 @@ static int isNameTaken(const char* name) {
     return 0;  // Nom disponible
 }
 
+// Fonction pour gérer les nouvelles connexions-- command
 static void handleNewConnection(){
     struct message msg;
     SOCKADDR_IN csin = {0};
@@ -960,6 +972,7 @@ static void handleNewConnection(){
     context->actualClients++;
 }
 
+// Fonction pour gérer les déconnexions volontaires -- command
 void handleExit(Client* client) {
 
     write_client(client->sock, "Goodbye!\n");
@@ -1007,7 +1020,7 @@ void handleExit(Client* client) {
 }
 
 
-
+// Fonction qui attribue le message d'un joueur à une commande -- server
 void processClientMessage(Client* client, const char* message) {
     if(client->sock == INVALID_SOCKET) {
         // Client socket is closed, skip processing
@@ -1027,10 +1040,10 @@ void processClientMessage(Client* client, const char* message) {
     }
     else
     if(strcmp(message, "list") == 0) {
-        sendClientList(client);
+        handleSendClientList(client);
     }
     else if(strcmp(message, "games") == 0) {
-        sendGamesList(client);
+        handleSendGamesList(client);
     }
     else if(strncmp(message, "challenge ", 10) == 0) {
         char * challengedName = message + 10;
@@ -1053,15 +1066,15 @@ void processClientMessage(Client* client, const char* message) {
         handleBiography(client, message + 10);
     }
     else if (strcmp(message, "friends") == 0) {
-        listFriends(client);
+        handleListFriends(client);
     }
     else if(strncmp(message, "friend", 6) == 0) {
         char * friendName = message + 7;
-        addFriend(client, friendName);
+        handleAddFriend(client, friendName);
     }
     else if(strncmp(message, "unfriend", 8) == 0) {
         char * friendName = message + 9;
-        unfriend(client, friendName);
+        handleUnfriend(client, friendName);
     }
     else if(strncmp(message, "privacy", 7) == 0) {
         char* privacy = message + 7;
@@ -1078,7 +1091,7 @@ void processClientMessage(Client* client, const char* message) {
     }
 }
 
-// Main application loop
+// Main application loop -- server
 static void app(void) {
     SOCKET sock = init_connection();
     initServerContext(sock);
