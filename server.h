@@ -81,6 +81,7 @@ static int findSpectatorGameSession(Client* spectator);
 static int createGameSession(Client* player1, Client* player2);
 static void handleGameMove(int sessionId, Client* client, const char* buffer);
 static int isNameTaken(const char *name);
+static void updateElo(Client* player1, Client* player2, int winner);
 static void handleNewConnection();
 static void processClientMessage(Client* client, const char* message);
 static void handleChallenge(Client* client, const char* challengedName);
