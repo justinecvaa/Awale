@@ -16,9 +16,12 @@ static ServerContext* context;
 
 // Main application loop -- server
 static void app(void) {
-    context = malloc(sizeof(ServerContext));
     SOCKET sock = init_connection();
-    initServerContext(&context, sock);
+    printf("Server started on port %d\n", PORT);
+    context = malloc(sizeof(ServerContext));
+    printf("Server started on port %d\n", PORT);
+    initServerContext(context, sock);
+    printf("Server started on port %d\n", PORT);
     struct message msg;
     fd_set rdfs;
 
@@ -114,85 +117,6 @@ static void clear_clients(Client *clients, int actual) {
     }
 }
 
-static int read_client(SOCKET sock, struct message *msg)
-{
-    // Lire d'abord la taille
-    int size_read = recv(sock, &msg->size, sizeof(uint32_t), 0);
-    if (size_read != sizeof(uint32_t)) {
-        if (size_read == 0) return 0;  // Connexion fermée
-        perror("recv() size");
-        return -1;
-    }
-
-    // Vérifier que la taille est valide
-    if (msg->size >= BUF_SIZE) {
-        fprintf(stderr, "Message trop grand: %u bytes\n", msg->size);
-        return -1;
-    }
-
-    // Lire ensuite exactement le nombre d'octets indiqué
-    int content_read = 0;
-    int remaining = msg->size;
-
-    while (remaining > 0) {
-        int n = recv(sock, msg->content + content_read, remaining, 0);
-        if (n <= 0) {
-            if (n == 0) return 0;  // Connexion fermée
-            perror("recv() content");
-            return -1;
-        }
-        content_read += n;
-        remaining -= n;
-    }
-
-    // Ajouter le caractère nul de fin
-    msg->content[msg->size] = 0;
-
-    return content_read;
-}
-
-
-static void write_client(SOCKET sock, const char *buffer)
-{
-    struct message msg;
-    msg.size = strlen(buffer);
-    
-    if (msg.size >= BUF_SIZE) {
-        fprintf(stderr, "Message trop grand\n");
-        return;
-    }
-    
-    strcpy(msg.content, buffer);
-    
-    // Envoyer la taille
-    if (send(sock, &msg.size, sizeof(uint32_t), 0) != sizeof(uint32_t)) {
-        perror("send() size");
-        return;
-    }
-    
-    // Envoyer le contenu
-    if (send(sock, msg.content, msg.size, 0) != msg.size) {
-        perror("send() content");
-        return;
-    }
-}
-
-static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server) {
-    char message[BUF_SIZE];
-    message[0] = 0;
-    
-    for(int i = 0; i < actual; i++) {
-        if(sender.sock != clients[i].sock) {
-            if(from_server == 0) {
-                strncpy(message, sender.name, BUF_SIZE - 1);
-                strncat(message, " : ", sizeof message - strlen(message) - 1);
-            }
-            strncat(message, buffer, sizeof message - strlen(message) - 1);
-            write_client(clients[i].sock, message);
-        }
-    }
-}
-
 
 static void init(void) {
 #ifdef WIN32
@@ -214,7 +138,9 @@ static void end(void) {
 
 int main(int argc, char **argv) {
     init();
+    printf("Server started on port %d\n", PORT);
     app();
+    printf("Server stopped\n");
     end();
     return EXIT_SUCCESS;
 }

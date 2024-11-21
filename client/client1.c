@@ -6,7 +6,7 @@
 #include <stdint.h> 
 
 #include "client1.h"
-#include "awale.h"
+#include "../awale/awale.h"
 
 static void init(void)
 {

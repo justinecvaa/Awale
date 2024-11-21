@@ -22,7 +22,7 @@ void initServerContext(ServerContext* context, SOCKET serverSocket) {
 }
 
 // Initialisation des sessions de jeu
-static void initGameSessions(ServerContext* context) {
+void initGameSessions(ServerContext* context) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
         context->gameSessions[i].isActive = 0;
         context->gameSessions[i].player1 = NULL;
@@ -33,7 +33,7 @@ static void initGameSessions(ServerContext* context) {
 }
 
 // Trouver une session de jeu disponible
-static int findFreeGameSession(ServerContext* context) {
+int findFreeGameSession(ServerContext* context) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
         if(!context->gameSessions[i].isActive) {
             return i;
@@ -43,7 +43,7 @@ static int findFreeGameSession(ServerContext* context) {
 }
 
 // Trouver la session de jeu d'un client
-static int findClientGameSession(Client* client, ServerContext* context) {
+int findClientGameSession(Client* client, ServerContext* context) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
         if(context->gameSessions[i].isActive && 
            (context->gameSessions[i].player1 == client || context->gameSessions[i].player2 == client)) {
@@ -54,7 +54,7 @@ static int findClientGameSession(Client* client, ServerContext* context) {
 }
 
 // Trouver la session de jeu d'un spectateur
-static int findSpectatorGameSession(Client* spectator, ServerContext* context) {
+int findSpectatorGameSession(Client* spectator, ServerContext* context) {
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
         if(context->gameSessions[i].isActive) {
             for(int j = 0; j < context->gameSessions[i].spectatorCount; j++) {
@@ -68,7 +68,7 @@ static int findSpectatorGameSession(Client* spectator, ServerContext* context) {
 }
 
 // Créer une nouvelle partie
-static int createGameSession(Client* player1, Client* player2, ServerContext* context) {
+int createGameSession(Client* player1, Client* player2, ServerContext* context) {
     int sessionId = findFreeGameSession(context);
     if(sessionId == -1) return -1;
     
@@ -101,7 +101,7 @@ void checkGameTimeouts(ServerContext* context) {
 }
 
 // Ajouter un spectateur à une session de jeu -- util
-static int addSpectatorToGame(int sessionId, Client* spectator, ServerContext* context) {
+int addSpectatorToGame(int sessionId, Client* spectator, ServerContext* context) {
     GameSession* session = &(context->gameSessions[sessionId]);
     if(session->player1->privacy == PRIVATE || session->player2->privacy == PRIVATE) {
         return 0;  // Pas de spectateurs pour les privées
@@ -131,7 +131,7 @@ static int addSpectatorToGame(int sessionId, Client* spectator, ServerContext* c
 }
 
 // Supprimer un spectateur de la session de jeu -- util
-static void removeSpectatorFromGame(int sessionId, Client* spectator, ServerContext* context) {
+void removeSpectatorFromGame(int sessionId, Client* spectator, ServerContext* context) {
     GameSession* session = &(context->gameSessions[sessionId]);
     for (int i = 0; i < session->spectatorCount; i++) {
         if (session->spectators[i] == spectator) {
@@ -145,7 +145,7 @@ static void removeSpectatorFromGame(int sessionId, Client* spectator, ServerCont
 }
 
 // Fonction pour vérifier la dispo d'un nom -- util
-static int isNameTaken(const char* name, ServerContext* context) {
+int isNameTaken(const char* name, ServerContext* context) {
     for(int i = 0; i < context->actualClients; i++) {
         if(strcmp(context->clients[i].name, name) == 0) {
             return 1;  // Nom déjà pris
@@ -210,6 +210,44 @@ const char* privacyToString(enum Privacy privacy) {
 
 
 // SERVER UTILS
+
+
+int read_client(SOCKET sock, struct message *msg)
+{
+    // Lire d'abord la taille
+    int size_read = recv(sock, &msg->size, sizeof(uint32_t), 0);
+    if (size_read != sizeof(uint32_t)) {
+        if (size_read == 0) return 0;  // Connexion fermée
+        perror("recv() size");
+        return -1;
+    }
+
+    // Vérifier que la taille est valide
+    if (msg->size >= BUF_SIZE) {
+        fprintf(stderr, "Message trop grand: %u bytes\n", msg->size);
+        return -1;
+    }
+
+    // Lire ensuite exactement le nombre d'octets indiqué
+    int content_read = 0;
+    int remaining = msg->size;
+
+    while (remaining > 0) {
+        int n = recv(sock, msg->content + content_read, remaining, 0);
+        if (n <= 0) {
+            if (n == 0) return 0;  // Connexion fermée
+            perror("recv() content");
+            return -1;
+        }
+        content_read += n;
+        remaining -= n;
+    }
+
+    // Ajouter le caractère nul de fin
+    msg->content[msg->size] = 0;
+
+    return content_read;
+}
 
 void write_client(SOCKET sock, const char *buffer)
 {

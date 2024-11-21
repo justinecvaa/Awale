@@ -34,45 +34,12 @@
     #error not defined for this platform
 #endif
 
-#define CRLF        "\r\n"
-#define PORT        1977
-#define MAX_CLIENTS 100
-#define MAX_GAME_SESSIONS 50
-#define MAX_SPECTATORS 10  // Limite du nombre de spectateurs par partie
-
-// Structure pour gérer l'état d'une partie en cours
-typedef struct {
-    int isActive;
-    Client* player1;
-    Client* player2;
-    Client* spectators[MAX_SPECTATORS];  // Tableau des spectateurs
-    int spectatorCount;                  // Nombre actuel de spectateurs
-    AwaleGame game;
-    int currentPlayerIndex;  // 0 pour player1, 1 pour player2
-    int waitingForMove;      // 1 si en attente d'un coup
-    time_t lastActivity;     // Pour gérer le timeout
-} GameSession;
-
-// Structure pour gérer le contexte du serveur
-typedef struct {
-    SOCKET serverSocket;
-    Client clients[MAX_CLIENTS];
-    int actualClients;
-    GameSession gameSessions[MAX_GAME_SESSIONS];
-    fd_set readfs;
-    int maxSocket;
-    time_t lastCleanupTime;
-    bool isRunning;
-} ServerContext;
 
 static void init(void);
 static void end(void);
 static void app(void);
 static int init_connection(void);
 static void end_connection(int sock);
-static int read_client(SOCKET sock, struct message *msg);
-static void write_client(SOCKET sock, const char *buffer);
-static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server);
 static void clear_clients(Client *clients, int actual);
 
 #endif /* SERVER_H */

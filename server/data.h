@@ -38,10 +38,6 @@
 #define MAX_GAME_SESSIONS 50
 #define MAX_SPECTATORS 10  // Limite du nombre de spectateurs par partie
 
-struct message {
-    uint32_t size;
-    char content[BUF_SIZE];
-};
 
 // Structure pour gérer l'état d'une partie en cours
 typedef struct {

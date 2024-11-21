@@ -349,7 +349,7 @@ void handleChallengeResponse(Client* client, const char* response, ServerContext
 }
 
 // Gérer un coup reçu d'un client -- command
-static void handleGameMove(int sessionId, Client* client, const char* buffer, ServerContext* context) {
+void handleGameMove(int sessionId, Client* client, const char* buffer, ServerContext* context) {
     GameSession* session = &context->gameSessions[sessionId];
     
     // Vérifier si c'est bien le tour du joueur
@@ -359,7 +359,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer, Se
 
     if (strncmp(buffer, "save state", 10) == 0) {
         // Sauvegarder la partie
-        handleSaveStateCommand(client, buffer + 10, &session->game, context);
+        handleSaveStateCommand(client, buffer + 10, &session->game);
         //write_client(client->sock, "Game saved.\n");
         return;
     }
@@ -370,7 +370,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer, Se
             return;
         }
         // Charger une partie
-        handleLoadCommand(session, client, buffer + 4, context);
+        handleLoadCommand(session, client, buffer + 4);
         return;
     }
 
@@ -441,7 +441,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer, Se
 }
 
 // Fonction pour faire une sauvegarde d'une partie à un moment donné -- command
-void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game, ServerContext* context)  
+void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game)  
 {
     if (message == NULL || strlen(message) == 0)
     {
@@ -461,7 +461,7 @@ void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game
 }
 
 // Fonction pour charger une partie sauvegardée -- command
-void handleLoadCommand(GameSession* session, Client* client, const char* message, ServerContext* context){
+void handleLoadCommand(GameSession* session, Client* client, const char* message){
     if (message == NULL || strlen(message) == 0)
     {
         write_client(client->sock, "Usage: load <save_name>\n");
@@ -488,7 +488,7 @@ void handleLoadCommand(GameSession* session, Client* client, const char* message
 }
 
 // Fonction pour gérer l'écriture ou lecture de biographie -- command
-static void handleBiography(Client* client, const char* message, ServerContext* context) {
+void handleBiography(Client* client, const char* message, ServerContext* context) {
     // Pour écrire sa propre biographie
     if (strncmp(message, "write", 5) == 0) {
         if (strlen(message) <= 6) {
@@ -539,7 +539,7 @@ static void handleBiography(Client* client, const char* message, ServerContext* 
 }
 
 // Fonction pour gérer les demandes d'amis -- command 
-static void handleAddFriend(Client* client, const char* friendName, ServerContext* context) {
+void handleAddFriend(Client* client, const char* friendName, ServerContext* context) {
     if (!friendName || strlen(friendName) == 0) {
         write_client(client->sock, "Usage: friend <player_name>\n");
         return;
@@ -645,7 +645,7 @@ void handleFriendResponse(Client* client, const char* response, ServerContext* c
 }
 
 // Fonction pour lister les amis -- command
-static void handleListFriends(Client* client, ServerContext* context) {
+void handleListFriends(Client* client, ServerContext* context) {
     if (client->friendCount == 0) {
         write_client(client->sock, "You have no friends in your list.\n");
         return;
@@ -671,7 +671,7 @@ static void handleListFriends(Client* client, ServerContext* context) {
 }
 
 // Fonction pour gérer les demandes de suppression d'amis -- command
-static void handleUnfriend(Client* client, const char* friendName, ServerContext* context) {
+void handleUnfriend(Client* client, const char* friendName, ServerContext* context) {
     // Chercher l'ami dans la liste du client
     for (int i = 0; i < client->friendCount; i++) {
         if (strcmp(client->friendList[i], friendName) == 0) {
@@ -718,7 +718,7 @@ static void handleUnfriend(Client* client, const char* friendName, ServerContext
 }
 
 // Fonction pour gérer la confidentialité -- command
-static void handlePrivacy(Client* client, const char* message, ServerContext* context) {
+void handlePrivacy(Client* client, const char* message, ServerContext* context) {
     // Si aucun message n'est passé, on affiche la confidentialité actuelle du client
     if (message == NULL || strlen(message) == 0) {
         char privacyMessage[BUF_SIZE];
@@ -742,7 +742,7 @@ static void handlePrivacy(Client* client, const char* message, ServerContext* co
 }
 
 // Fonction pour gérer le message d'aide -- command
-static void handleHelp(Client* client) {
+void handleHelp(Client* client) {
     write_client(client->sock, "Available commands:\n");
     write_client(client->sock, "list: List all connected clients\n");
     write_client(client->sock, "games: List all active games\n");
@@ -813,7 +813,7 @@ void handleExit(Client* client, ServerContext* context) {
 }
 
 // Fonction pour gérer les nouvelles connexions-- command
-static void handleNewConnection(ServerContext* context){
+void handleNewConnection(ServerContext* context){
     struct message msg;
     SOCKADDR_IN csin = {0};
             socklen_t sinsize = sizeof csin;

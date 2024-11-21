@@ -27,7 +27,7 @@ typedef struct in_addr IN_ADDR;
 
 #endif
 
-#include "message.h"
+#include "../message.h"
 
 #define CRLF     "\r\n"
 #define PORT     1977

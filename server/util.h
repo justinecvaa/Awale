@@ -32,8 +32,8 @@ const char* privacyToString(enum Privacy privacy);
 
 
 // Server utilities
+int read_client(SOCKET sock, struct message *msg);
 void write_client(SOCKET sock, const char *buffer);
 void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server);
-
 
 #endif
