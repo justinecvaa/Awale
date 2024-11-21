@@ -305,16 +305,6 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         return;
     }
 
-    if (strncmp(buffer, "quit", 4) == 0) {
-        // Quitter la partie
-        char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
-        session->isActive = 0;
-        char message[BUF_SIZE];
-        snprintf(message, sizeof(message), "%s left the game. %s won!\n", client->name, winner);
-        write_client(session->player1->sock, message);
-        write_client(session->player2->sock, message);
-        return;
-    }
 
     if (strncmp(buffer, "load", 4) == 0){
         if(session->game.turnCount > 0){
@@ -331,6 +321,17 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         return;
     }
 
+    if (strncmp(buffer, "quit", 4) == 0) {
+        // Quitter la partie
+        char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
+        session->isActive = 0;
+        char message[BUF_SIZE];
+        snprintf(message, sizeof(message), "%s left the game. %s won!\n", client->name, winner);
+        write_client(session->player1->sock, message);
+        write_client(session->player2->sock, message);
+        return;
+    }
+    
     if(client != currentPlayer || !session->waitingForMove) {
         write_client(client->sock, "It's not your turn!\n");
         return;
@@ -366,11 +367,34 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         
         // Vérifier si la partie est terminée
         if(session->game.gameOver) {
-            write_client(session->player1->sock, "Game Over!\n");
-            write_client(session->player2->sock, "Game Over!\n");
-            session->isActive = 0;
+            handleGameOver(session);
         }
     }
+}
+
+void handleGameOver(GameSession* session) {
+    char message[BUF_SIZE];
+    if(session->game.winner == 0) {
+        snprintf(message, sizeof(message), "Game Over! %s wins with %d points!\n", session->player1->name, session->game.score[0]);
+    } else if(session->game.winner == 1) {
+        snprintf(message, sizeof(message), "Game Over! %s wins with %d points!\n", session->player2->name, session->game.score[1]);
+    } else {
+        snprintf(message, sizeof(message), "Game Over! It's a tie with %d points each!\n", session->game.score[0]);
+    }
+    write_client(session->player1->sock, message);
+    write_client(session->player2->sock, message);
+    session->isActive = 0;
+}
+
+void updateElo(Client* player1, Client* player2, int winner) {
+    int k = 32;
+    double exponent1 = (double)(player2->elo - player1->elo) / 400;
+    double expected1 = 1 / (1 + pow(10, exponent));
+    double expected2 = 1 / (1 + pow(10, -exponent));
+    int newElo1 = player1->elo + k * (winner - expected1);
+    int newElo2 = player2->elo + k * (1 - winner - expected2);
+    player1->elo = newElo1;
+    player2->elo = newElo2;
 }
 
 // Fonction pour gérer les messages de jeu ou de chat
@@ -890,6 +914,7 @@ static void handleNewConnection(){
     c.friendCount = 0;
     c.friendRequestBy = -1;
     c.privacy = PUBLIC;
+    c.elo = 1000;
 
     context->clients[context->actualClients] = c;
     context->actualClients++;
