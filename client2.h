@@ -16,6 +16,7 @@ enum Privacy
 typedef struct
 {
    SOCKET sock;
+   int validName;
    char name[BUF_SIZE];
    int challengedBy;
    int inGameOpponent;

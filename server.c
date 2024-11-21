@@ -243,7 +243,7 @@ void handleClientDisconnect(int clientIndex) {
     remove_client(context->clients, clientIndex, &context->actualClients);
 }
 
-void handleSaveCommand(Client* client, const char* message, AwaleGame *game) 
+void handleSaveCommandLaunch(Client* client, const char* message, AwaleGame *game) 
 {
     if (message == NULL || strlen(message) == 0)
     {
@@ -271,7 +271,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 
     if (strncmp(buffer, "save", 4) == 0) {
         // Sauvegarder la partie
-        handleSaveCommand(currentPlayer, buffer + 4, &session->game);
+        handleSaveCommandLaunch(currentPlayer, buffer + 4, &session->game);
         //write_client(client->sock, "Game saved.\n");
         return;
     }
@@ -833,14 +833,12 @@ static void handleNewConnection(){
     Client c = {csock};
     strncpy(c.name, msg.content, BUF_SIZE - 1);
 
-        // Vérification du nom
+    // Vérification du nom
+    c.validName = 1;
     if(isNameTaken(c.name)) {
         write_client(c.sock, "Name already taken. Please choose another name:\n");
-        // Lire un nouveau nom du client
-        if(read_client(c.sock, &msg) == -1) {   //TODO : faire en sorte que ça ne soit pas bloquant
-            return;
-        }
-        strncpy(c.name, msg.content, BUF_SIZE - 1);
+        write_client(c.sock, "Name: ");
+        c.validName = 0;
     }
     c.biography[0] = 0;
     c.challengedBy = -1;
@@ -855,6 +853,18 @@ static void handleNewConnection(){
 
 
 void processClientMessage(Client* client, const char* message) {
+    if(!client->validName) {
+        // Vérifier si le nom est déjà pris
+        if(isNameTaken(message)) {
+            write_client(client->sock, "Name already taken. Please choose another name:\n");
+            write_client(client->sock, "Name: ");
+            return;
+        }
+        strncpy(client->name, message, BUF_SIZE - 1);
+        client->validName = 1;
+        write_client(client->sock, "Welcome to the server!\n");
+    }
+    else
     if(strcmp(message, "list") == 0) {
         sendClientList(client);
     }
