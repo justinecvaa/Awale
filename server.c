@@ -243,20 +243,22 @@ void handleClientDisconnect(int clientIndex) {
     remove_client(context->clients, clientIndex, &context->actualClients);
 }
 
-void handleSaveCommand(Client* client, const char* message, AwaleGame *game) 
+void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game) 
 {
     if (message == NULL || strlen(message) == 0)
     {
-        write_client(client->sock, "Usage: save <save_name>\n");
+        write_client(client->sock, "Usage: save state <save_name>\n");
         return;
     }
     if (saveGame(game, message+1, game->playerNames[0], game->playerNames[1]))
     {
-        write_client(client->sock, "Game saved successfully!\n"); //TODO : pourquoi ça save pas???????????????
+        char response[BUF_SIZE];
+        snprintf(response, sizeof(response), "State of game saved successfully as '%s'\n", message+1);
+        write_client(client->sock, response); 
     }
     else
     {
-        write_client(client->sock, "Failed to save game.\n");
+        write_client(client->sock, "Failed to save state game.\n");
     }
 }
 
@@ -269,9 +271,9 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     Client* currentPlayer = (session->currentPlayerIndex == 0) ? session->player1 : session->player2;
 
 
-    if (strncmp(buffer, "save", 4) == 0) {
+    if (strncmp(buffer, "save state", 10) == 0) {
         // Sauvegarder la partie
-        handleSaveCommand(currentPlayer, buffer + 4, &session->game);
+        handleSaveStateCommand(client, buffer + 10, &session->game);
         //write_client(client->sock, "Game saved.\n");
         return;
     }
