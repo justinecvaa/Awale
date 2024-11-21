@@ -235,8 +235,15 @@ void handleClientDisconnect(int clientIndex, ServerContext* context) {
     if(gameSession != -1) {
         GameSession* session = &context->gameSessions[gameSession];
         Client* otherPlayer = (session->player1 == client) ? session->player2 : session->player1;
+        session->game.winner = (strcmp(client->name, session->player1->name) == 0) ? 1 : 0;
         write_client(otherPlayer->sock, "Your opponent disconnected. Game Over!\n");
+        updateElo(session->player1, session->player2, session->game.winner);
+        printUpdatedElo(session->player1, session->player2);
         session->isActive = 0;
+    }
+    if(client->challengedBy != -1) {
+        write_client(context->clients[client->challengedBy].sock, "The opponent disconnected, challenge cancelled.\n");
+        context->clients[client->challengedBy].challengedBy = -1;
     }
     
     closesocket(client->sock);
@@ -343,6 +350,23 @@ void handleChallengeResponse(Client* client, const char* response, ServerContext
     if(strcmp(response, "accept") == 0) {
         int opponentIndex = client->challengedBy;
         int sessionId = createGameSession(client, &context->clients[opponentIndex], context);
+        if(sessionId == -1){
+            write_client(client->sock, "Game session could not be created.\n");
+            return;
+        }
+
+        // bool isOnline = false;
+        // // Vérifier si l'ami est toujours en ligne
+        // for (int j = 0; j < context->actualClients; j++) {
+        //     if (strcmp(context->clients[j].name, &context->clients[opponentIndex].name) == 0) {
+        //         isOnline = true;
+        //         break;
+        //     }
+        // }
+        // if(!isOnline) {
+        //     write_client(client->sock, "The opponent disconnected, challenge cancelled.\n");
+        //     return;
+        // }
         if(sessionId != -1) {
             startGame(sessionId, client, &context->clients[opponentIndex], context);
         }
@@ -400,7 +424,7 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
     if (strncmp(buffer, "quit", 4) == 0) {
         // Quitter la partie
         char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
-        session->game.winner = (strcmp(client->name, session->player1->name) == 0) ? 0 : 1;
+        session->game.winner = (strcmp(client->name, session->player1->name) == 0) ? 1 : 0;
         session->isActive = 0;
         updateElo(session->player1, session->player2, session->game.winner);
         char message[BUF_SIZE];

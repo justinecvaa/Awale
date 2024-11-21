@@ -163,13 +163,13 @@ void updateElo(Client* player1, Client* player2, int winner) {
     double expected2 = 1 / (1 + pow(10, -exponent1));
     
     double score1, score2;
-    if (winner == 0) {
+    if (winner == 0) { // Player 1 wins
         score1 = 1.0;
         score2 = 0.0;
-    } else if (winner == 1) {
+    } else if (winner == 1) { // Player 2 wins
         score1 = 0.0;
         score2 = 1.0;
-    } else {
+    } else { // Tie
         score1 = 0.5;
         score2 = 0.5;
     }
