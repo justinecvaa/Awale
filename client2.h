@@ -25,6 +25,6 @@ typedef struct
    char friendList[MAX_FRIENDS][BUF_SIZE];
    int friendCount;
    int friendRequestBy;
-}Client;
+} Client;
 
 #endif /* guard */
