@@ -369,6 +369,13 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         return;
     }
 
+    if (strncmp(buffer, "save game", 9) == 0) {
+        // Sauvegarder la partie
+        handleSaveGameCommand(client, buffer + 9, &session->game);
+        //write_client(client->sock, "Game saved.\n");
+        return;
+    }
+
     if (strncmp(buffer, "load", 4) == 0){
         if(session->game.turnCount > 0){
             write_client(client->sock, "Game already started. You can't load a game now.\n");
@@ -462,6 +469,25 @@ void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game
     else
     {
         write_client(client->sock, "Failed to save state game.\n");
+    }
+}
+
+void handleSaveGameCommand(Client* client, const char* message, AwaleGame *game)  
+{
+    if (message == NULL || strlen(message) == 0)
+    {
+        write_client(client->sock, "Usage: save game <save_name>\n");
+        return;
+    }
+    if (saveCompleteGame(game, message+1, game->playerNames[0], game->playerNames[1], game->moveHistory, game->moveCount))
+    {
+        char response[BUF_SIZE];
+        snprintf(response, sizeof(response), "Game saved successfully as '%s'\n", message+1);
+        write_client(client->sock, response); 
+    }
+    else
+    {
+        write_client(client->sock, "Failed to save game.\n");
     }
 }
 

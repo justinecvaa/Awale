@@ -20,6 +20,8 @@ void initializeGame(AwaleGame* game, const char* player1Name, const char* player
     game->lastMove = -1;
     game->winner = -1;
     game->turnCount = 0;
+    game->moveHistory = malloc(MAX_MOVES * sizeof(AwaleMove));;
+    game->moveCount = 0;
     strcpy(game->playerNames[0], player1Name);
     strcpy(game->playerNames[1], player2Name);
     strcpy(game->message, "Game started");
@@ -156,6 +158,21 @@ bool makeMove(AwaleGame* game, int house) {
             currentHouse = HOUSES - 1;
             currentPlayer = 1 - currentPlayer;
         }
+    }
+
+    // Mise à jour de l'historique des mouvements
+    if (game->moveCount < MAX_MOVES) {
+        // Créer un nouveau mouvement et le remplir
+        AwaleMove newMove;
+        newMove.timestamp = time(NULL); // L'heure à laquelle le mouvement a été effectué
+        strncpy(newMove.playerName, game->playerNames[game->currentPlayer], 50);
+        newMove.move = house;
+        memcpy(newMove.board, game->board, sizeof(game->board)); // Copie de l'état actuel du plateau
+        memcpy(newMove.score, game->score, sizeof(game->score)); // Copie des scores
+        strncpy(newMove.playerName, game->playerNames[game->currentPlayer], 50);
+        // Ajouter le mouvement à l'historique
+        game->moveHistory[game->moveCount] = newMove;
+        game->moveCount++;  // Incrémenter le compteur de mouvements
     }
 
     game->lastMove = house;
