@@ -305,6 +305,20 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
         return;
     }
 
+    if (strncmp(buffer, "quit", 4) == 0) {
+        // Quitter la partie
+        char *winner = (strcmp(client->name, session->player1->name) == 0) ? session->player2->name : session->player1->name;
+        session->isActive = 0;
+        char message[BUF_SIZE];
+        session->player1->inGameOpponent = -1;
+        session->player2->inGameOpponent = -1;
+        session->player1->challengedBy = -1;
+        session->player2->challengedBy = -1;
+        snprintf(message, sizeof(message), "%s left the game. %s won!\n", client->name, winner);
+        write_client(session->player1->sock, message);
+        write_client(session->player2->sock, message);
+        return;
+    }
 
     if (strncmp(buffer, "load", 4) == 0){
         if(session->game.turnCount > 0){
@@ -441,7 +455,7 @@ void handlePrivateMessage(Client* client, const char* message) {
     if (strcmp(dest_name, client->name) == 0) {
         write_client(client->sock, "You cannot send a private message to yourself.\n");
         return;
-    }  
+    }
 
     // Extraire le message - on utilise strtok(NULL, "") pour obtenir le reste de la chaîne
     char* private_message = strtok(NULL, "");
@@ -466,12 +480,17 @@ void handlePrivateMessage(Client* client, const char* message) {
     for (int j = 0; j < context->actualClients; j++) {
         if (strcmp(context->clients[j].name, dest_name) == 0) {
             char formattedMessage[BUF_SIZE];
-            
+
             // Confirmation au sender
             snprintf(formattedMessage, sizeof(formattedMessage), 
                     "[Private to %s] %s\n", dest_name, private_message);
             write_client(client->sock, formattedMessage);
-            
+
+            // Envoi du message au destinataire
+            snprintf(formattedMessage, sizeof(formattedMessage), 
+                    "[Private from %s] %s\n", client->name, private_message);
+            write_client(context->clients[j].sock, formattedMessage);
+
             found = 1;
             break;
         }
@@ -832,6 +851,9 @@ static void handleHelp(Client* client) {
     write_client(client->sock, "all <message>: Send a message to all clients\n");
     write_client(client->sock, "private <name> <message>: Send a private message to a client\n");
     write_client(client->sock, "help: Display this help message\n");
+    write_client(client->sock, "quit: Exit a game\n");
+    write_client(client->sock, "save state <save_name>: Save the state of the game\n");
+    write_client(client->sock, "save game <save_name>: Save the game\n");
 }
 
 
@@ -920,8 +942,60 @@ static void handleNewConnection(){
     context->actualClients++;
 }
 
+void handleExit(Client* client) {
+
+    write_client(client->sock, "Goodbye!\n");
+
+    int clientIndex = -1;
+    for (int i = 0; i < context->actualClients; i++) {
+        if (&context->clients[i] == client) {
+            clientIndex = i;
+            break;
+        }
+    }
+
+    // Ensure client exists before processing
+    if (clientIndex == -1) {
+        return;
+    }
+
+    // Mark client as invalid (or any other state management)
+    client->sock = INVALID_SOCKET;  // Mark the socket as closed
+
+    if (client->inGameOpponent != -1) {
+        // Trouver la session de jeu
+        int gameSession = findClientGameSession(client);
+        if (gameSession != -1) {
+            GameSession* session = &context->gameSessions[gameSession];
+            Client* otherPlayer = (session->player1 == client) ? session->player2 : session->player1;
+            write_client(otherPlayer->sock, "Your opponent disconnected. Game Over!\n");
+            otherPlayer->inGameOpponent = -1;
+            otherPlayer->challengedBy = -1;
+            session->isActive = 0;
+        }
+    }
+
+    // Clean up session details, remove from game/spectator lists, etc.
+    int spectatingSession = findSpectatorGameSession(client);
+    if (spectatingSession != -1) {
+        removeSpectatorFromGame(spectatingSession, client);
+    }
+
+    // Close socket
+    closesocket(client->sock);
+
+    // Remove the client from the client list
+    remove_client(context->clients, clientIndex, &context->actualClients);
+}
+
+
 
 void processClientMessage(Client* client, const char* message) {
+    if(client->sock == INVALID_SOCKET) {
+        // Client socket is closed, skip processing
+        return;
+    }
+
     if(!client->validName) {
         // Vérifier si le nom est déjà pris
         if(isNameTaken(message)) {
@@ -978,10 +1052,13 @@ void processClientMessage(Client* client, const char* message) {
     else if (strncmp(message, "help", 4) == 0) {
         handleHelp(client);
     }
+    else if (strncmp(message, "exit", 4) == 0) {
+        handleExit(client);
+    }
     else {
         handleGameOrChat(client, message);
     }
-    }
+}
 
 // Main application loop
 static void app(void) {
@@ -1015,6 +1092,11 @@ static void app(void) {
             for(int i = 0; i < context->actualClients; i++) {
                 if(FD_ISSET(context->clients[i].sock, &rdfs)) {
                     Client* client = &context->clients[i];
+
+                    if(client->sock == INVALID_SOCKET) {
+                        continue;  // Skip this client as their socket is closed
+                    }
+
                     int c = read_client(client->sock, &msg);
                     
                     if(c == 0) {
@@ -1156,9 +1238,18 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
     }
 }
 
-static void remove_client(Client *clients, int to_remove, int *actual) {
-    memmove(clients + to_remove, clients + to_remove + 1, (*actual - to_remove - 1) * sizeof(Client));
-    (*actual)--;
+void remove_client(Client* clients, int indexToRemove, int* actualClients) {
+    // Vérifier si l'index est valide
+    if (indexToRemove < 0 || indexToRemove >= *actualClients) {
+        return;
+    }
+
+    // Utiliser une approche de décalage mémoire plus sûre
+    memmove(&clients[indexToRemove], &clients[indexToRemove + 1], 
+            (*actualClients - indexToRemove - 1) * sizeof(Client));
+
+    // Décrémenter le nombre de clients
+    (*actualClients)--;
 }
 
 static void init(void) {
