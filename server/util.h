@@ -31,4 +31,9 @@ void remove_client(Client *clients, int to_remove, int *actual);
 const char* privacyToString(enum Privacy privacy);
 
 
+// Server utilities
+void write_client(SOCKET sock, const char *buffer);
+void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server);
+
+
 #endif

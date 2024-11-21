@@ -14,7 +14,6 @@
 
 // Fonction d'initialisation du contexte serveur -- util
 void initServerContext(ServerContext* context, SOCKET serverSocket) {
-    context = malloc(sizeof(ServerContext));
     context->serverSocket = serverSocket;
     context->actualClients = 0;
     context->maxSocket = serverSocket;
@@ -206,5 +205,49 @@ const char* privacyToString(enum Privacy privacy) {
             return "PUBLIC";
         default:
             return "UNKNOWN";
+    }
+}
+
+
+// SERVER UTILS
+
+void write_client(SOCKET sock, const char *buffer)
+{
+    struct message msg;
+    msg.size = strlen(buffer);
+    
+    if (msg.size >= BUF_SIZE) {
+        fprintf(stderr, "Message trop grand\n");
+        return;
+    }
+    
+    strcpy(msg.content, buffer);
+    
+    // Envoyer la taille
+    if (send(sock, &msg.size, sizeof(uint32_t), 0) != sizeof(uint32_t)) {
+        perror("send() size");
+        return;
+    }
+    
+    // Envoyer le contenu
+    if (send(sock, msg.content, msg.size, 0) != msg.size) {
+        perror("send() content");
+        return;
+    }
+}
+
+void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server) {
+    char message[BUF_SIZE];
+    message[0] = 0;
+    
+    for(int i = 0; i < actual; i++) {
+        if(sender.sock != clients[i].sock) {
+            if(from_server == 0) {
+                strncpy(message, sender.name, BUF_SIZE - 1);
+                strncat(message, " : ", sizeof message - strlen(message) - 1);
+            }
+            strncat(message, buffer, sizeof message - strlen(message) - 1);
+            write_client(clients[i].sock, message);
+        }
     }
 }
