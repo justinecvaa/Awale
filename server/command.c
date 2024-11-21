@@ -78,6 +78,11 @@ void processClientMessage(Client* client, const char* message, ServerContext* co
     else if (strncmp(message, "exit", 4) == 0) {
         handleExit(client, context);
     }
+    else if (strncmp(message, "elo", 3) == 0) {
+        char eloMessage[BUF_SIZE];
+        snprintf(eloMessage, sizeof(eloMessage), "Your ELO rating: %d\n", client->elo);
+        write_client(client->sock, eloMessage);
+    }
     else {
         handleGameOrChat(client, message, context);
     }
@@ -763,6 +768,9 @@ void handleHelp(Client* client) {
     write_client(client->sock, "quit: Exit a game\n");
     write_client(client->sock, "save state <save_name>: Save the state of the game\n");
     write_client(client->sock, "save game <save_name>: Save the game\n");
+    write_client(client->sock, "load <save_name>: Load a game\n");
+    write_client(client->sock, "list saves: List all saved games\n");
+    write_client(client->sock, "elo: View your ELO rating\n");
 }
 
 // Fonction pour gérer les déconnexions volontaires -- command
