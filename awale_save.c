@@ -244,36 +244,6 @@ void listSaves(void)
 #endif
 }
 
-/*void handleSaveCommand(AwaleGame *game)
-{
-    char saveName[64];
-    char player1Name[32];
-    char player2Name[32];
-
-    printf("Enter save name: ");
-    scanf("%63s", saveName);
-    while (getchar() != '\n')
-        ; // Vider le buffer
-
-    printf("Enter Player 1 name: ");
-    scanf("%31s", player1Name);
-    while (getchar() != '\n')
-        ;
-
-    printf("Enter Player 2 name: ");
-    scanf("%31s", player2Name);
-    while (getchar() != '\n')
-        ;
-
-    if (saveGame(game, saveName, player1Name, player2Name))
-    {
-        printf("Game saved successfully!\n");
-    }
-    else
-    {
-        printf("Failed to save game.\n");
-    }
-}*/
 
 void handleLoadCommand(AwaleGame *game)
 {

@@ -243,7 +243,7 @@ void handleClientDisconnect(int clientIndex) {
     remove_client(context->clients, clientIndex, &context->actualClients);
 }
 
-void handleSaveCommandLaunch(Client* client, const char* message, AwaleGame *game) 
+void handleSaveCommand(Client* client, const char* message, AwaleGame *game) 
 {
     if (message == NULL || strlen(message) == 0)
     {
@@ -271,7 +271,7 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
 
     if (strncmp(buffer, "save", 4) == 0) {
         // Sauvegarder la partie
-        handleSaveCommandLaunch(currentPlayer, buffer + 4, &session->game);
+        handleSaveCommand(currentPlayer, buffer + 4, &session->game);
         //write_client(client->sock, "Game saved.\n");
         return;
     }
