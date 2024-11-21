@@ -3,10 +3,23 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <time.h>
 
 // Constantes du jeu
 #define HOUSES 6
 #define SEEDS 4
+
+// Structure pour représenter un mouvement dans le jeu Awale
+typedef struct
+{
+    // Métadonnées pour chaque mouvement
+    time_t timestamp;
+    char playerName[64];  // Nom du joueur ayant effectué le mouvement
+    int move;             // Le mouvement effectué (par exemple, le numéro du trou d'où les graines ont été prises)
+    int board[2][HOUSES];         // Par exemple, l'état du plateau après le mouvement
+    int score[2];                 // Scores des joueurs après le mouvement
+} AwaleMove;
+
 
 // Structure pour représenter l'état du jeu Awale
 typedef struct {
@@ -19,7 +32,10 @@ typedef struct {
     int turnCount;           // Nombre de tours joués
     int lastMove;           // Dernier coup joué
     int winner;             // Gagnant (-1: pas de gagnant, 0: joueur 1, 1: joueur 2, 2: égalité)
+    AwaleMove *moveHistory;  // Pointeur vers un tableau d'historique des mouvements
+    size_t moveCount;        // Nombre de mouvements effectués
 } AwaleGame;
+
 
 // Prototypes des fonctions
 /**

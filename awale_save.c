@@ -71,6 +71,73 @@ static void writeJsonFile(const char *saveName, const AwaleGame *game, const Sav
     }
 }
 
+
+// Fonction interne pour générer le fichier JSON
+static void writeJsonFileMoves(const char *saveName, const AwaleGame *game, const SaveMetadata *metadata)
+{
+    char jsonFilename[128];
+    snprintf(jsonFilename, sizeof(jsonFilename), "saves/%s.json", saveName);
+
+    FILE *jsonFile = fopen(jsonFilename, "w");
+    if (jsonFile)
+    {
+        // Écriture des métadonnées
+        fprintf(jsonFile, "{\n");
+        fprintf(jsonFile, "  \"metadata\": {\n");
+        fprintf(jsonFile, "    \"saveName\": \"%s\",\n", metadata->saveName);
+        fprintf(jsonFile, "    \"timestamp\": %ld,\n", metadata->timestamp);
+        fprintf(jsonFile, "    \"player1\": \"%s\",\n", metadata->player1Name);
+        fprintf(jsonFile, "    \"player2\": \"%s\"\n", metadata->player2Name);
+        fprintf(jsonFile, "  },\n");
+
+        // Écriture des mouvements
+        fprintf(jsonFile, "  \"moves\": [\n");
+        for (size_t i = 0; i < game->moveCount; i++)
+        {
+            // Écriture des informations sur le mouvement
+            fprintf(jsonFile, "    {\n");
+            fprintf(jsonFile, "      \"timeStamp\": %ld,\n", game->moveHistory[i].timestamp);
+            fprintf(jsonFile, "      \"player\": \"%s\",\n", game->moveHistory[i].playerName); // playerName est une chaîne, donc il doit être écrit comme un string dans le JSON
+            fprintf(jsonFile, "      \"house\": %d,\n", game->moveHistory[i].move);
+
+            // État du jeu après le mouvement
+            fprintf(jsonFile, "      \"gameState\": {\n");
+            fprintf(jsonFile, "        \"board\": [\n");
+            fprintf(jsonFile, "          [");
+
+            // Tableau du joueur 1
+            for (int j = 0; j < HOUSES; j++)
+            {
+                fprintf(jsonFile, "%d%s", game->moveHistory[i].board[0][j], j < HOUSES - 1 ? ", " : "");
+            }
+
+            fprintf(jsonFile, "],\n          [");
+
+            // Tableau du joueur 2
+            for (int j = 0; j < HOUSES; j++)
+            {
+                fprintf(jsonFile, "%d%s", game->moveHistory[i].board[1][j], j < HOUSES - 1 ? ", " : "");
+            }
+
+            fprintf(jsonFile, "]\n        ],\n");
+            fprintf(jsonFile, "        \"scores\": [%d, %d],\n", game->moveHistory[i].score[0], game->moveHistory[i].score[1]);
+            fprintf(jsonFile, "        \"gameOver\": %s,\n", game->gameOver ? "true" : "false");
+            fprintf(jsonFile, "        \"winner\": %d\n", game->winner);
+            fprintf(jsonFile, "      }\n");
+
+            // Si ce n'est pas le dernier mouvement, ajouter une virgule
+            fprintf(jsonFile, "    }%s\n", i < game->moveCount - 1 ? "," : "");
+        }
+
+        // Fermeture du tableau de mouvements et de l'objet JSON
+        fprintf(jsonFile, "  ]\n");
+        fprintf(jsonFile, "}\n");
+
+        fclose(jsonFile);
+    }
+}
+
+
 bool saveGame(const AwaleGame *game, const char *saveName, const char *player1Name, const char *player2Name)
 {
     ensureSaveDirectoryExists();
@@ -111,6 +178,58 @@ bool saveGame(const AwaleGame *game, const char *saveName, const char *player1Na
     printf("Game saved successfully as '%s'\n", saveName);
     return true;
 }
+
+bool saveCompleteGame(const AwaleGame *game, const char *saveName, const char *player1Name, const char *player2Name, const AwaleMove *moves, size_t moveCount)
+{
+    ensureSaveDirectoryExists();
+
+    // Créer la structure de sauvegarde
+    AwaleSaveGame saveGame;
+    
+    // Sauvegarder l'état actuel du jeu
+    memcpy(&saveGame.game, game, sizeof(AwaleGame));
+
+    // Sauvegarder l'historique des mouvements
+    saveGame.moveCount = moveCount;
+    for (size_t i = 0; i < moveCount; i++)
+    {
+        saveGame.moves[i] = moves[i];
+    }
+
+    // Remplir les métadonnées
+    saveGame.metadata.timestamp = time(NULL);
+    strncpy(saveGame.metadata.saveName, saveName, sizeof(saveGame.metadata.saveName) - 1);
+    strncpy(saveGame.metadata.player1Name, player1Name, sizeof(saveGame.metadata.player1Name) - 1);
+    strncpy(saveGame.metadata.player2Name, player2Name, sizeof(saveGame.metadata.player2Name) - 1);
+
+    // Créer le nom du fichier de sauvegarde
+    char filename[128];
+    snprintf(filename, sizeof(filename), "saves/%s.awale", saveName);
+
+    // Sauvegarder le fichier binaire
+    FILE *file = fopen(filename, "wb");
+    if (!file)
+    {
+        printf("Error: Could not create save file\n");
+        return false;
+    }
+
+    size_t written = fwrite(&saveGame, sizeof(AwaleSaveGame), 1, file);
+    fclose(file);
+
+    if (written != 1)
+    {
+        printf("Error: Failed to write save file\n");
+        return false;
+    }
+
+    // Générer le fichier JSON
+    writeJsonFileMoves(saveName, game, &saveGame.metadata);
+
+    printf("Game and history saved successfully as '%s'\n", saveName);
+    return true;
+}
+
 
 bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *player2Name)
 {

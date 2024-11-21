@@ -262,6 +262,27 @@ void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game
     }
 }
 
+
+void handleSaveGameCommand(Client* client, const char* message, AwaleGame *game) 
+{
+    if (message == NULL || strlen(message) == 0)
+    {
+        write_client(client->sock, "Usage: save <save_name>\n");
+        return;
+    }
+    if (saveCompleteGame(game, message+1, game->playerNames[0], game->playerNames[1], game->moveHistory, game->moveCount))
+    {
+        char response[BUF_SIZE];
+        snprintf(response, sizeof(response), "Game saved successfully as '%s'\n", message+1);
+        write_client(client->sock, response); 
+    }
+    else
+    {
+        write_client(client->sock, "Failed to save game.\n");
+    }
+}
+
+
 void handleLoadCommand(GameSession* session, Client* client, const char* message){
     if (message == NULL || strlen(message) == 0)
     {
@@ -301,6 +322,13 @@ static void handleGameMove(int sessionId, Client* client, const char* buffer) {
     if (strncmp(buffer, "save state", 10) == 0) {
         // Sauvegarder la partie
         handleSaveStateCommand(client, buffer + 10, &session->game);
+        //write_client(client->sock, "Game saved.\n");
+        return;
+    }
+
+    if (strncmp(buffer, "save game", 9) == 0) {
+        // Sauvegarder la partie
+        handleSaveGameCommand(client, buffer + 9, &session->game);
         //write_client(client->sock, "Game saved.\n");
         return;
     }
