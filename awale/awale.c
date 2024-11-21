@@ -4,7 +4,7 @@
 #include <string.h>
 
 // Initialise une nouvelle partie
-void initializeGame(AwaleGame* game, const char* player1Name, const char* player2Name) {
+void initializeGame(AwaleGame* game, const char* player1Name, const char* player2Name, const int currentPlayer) {
     // Initialiser le plateau
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < HOUSES; j++) {
@@ -15,7 +15,7 @@ void initializeGame(AwaleGame* game, const char* player1Name, const char* player
     // Initialiser les autres variables
     game->score[0] = 0;
     game->score[1] = 0;
-    game->currentPlayer = 0;
+    game->currentPlayer = 1 - currentPlayer;
     game->gameOver = false;
     game->lastMove = -1;
     game->winner = -1;

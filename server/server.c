@@ -137,6 +137,7 @@ static void end(void) {
 
 
 int main(int argc, char **argv) {
+    srand(time(NULL));
     init();
     printf("Server started on port %d\n", PORT);
     app();

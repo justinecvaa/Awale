@@ -42,7 +42,7 @@ typedef struct {
  * Initialise une nouvelle partie
  * @param game Pointeur vers la structure du jeu à initialiser
  */
-void initializeGame(AwaleGame* game, const char* player1Name, const char* player2Name);
+void initializeGame(AwaleGame* game, const char* player1Name, const char* player2Name, const int currentPlayer);
 
 /**
  * Vérifie si la partie est terminée

@@ -80,7 +80,7 @@ int createGameSession(Client* player1, Client* player2, ServerContext* context) 
     session->waitingForMove = 1;
     session->lastActivity = time(NULL);
     
-    initializeGame(&session->game, player1->name, player2->name);
+    initializeGame(&session->game, player1->name, player2->name, session->currentPlayerIndex);
     return sessionId;
 }
 
