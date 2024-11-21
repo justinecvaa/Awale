@@ -103,5 +103,6 @@ static void unfriend(Client* client, const char* friendName);
 static void handlePrivacy(Client* client, const char* privacy);
 static void handleHelp(Client* client);
 static void handleSaveStateCommand(Client* client, const char* message, AwaleGame *game);
+static void handleExit(Client* client);
 
 #endif /* SERVER_H */
