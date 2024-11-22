@@ -8,6 +8,7 @@
 #include "awale.h"  // Inclut la définition de AwaleGame
 
 #define MAX_MOVES 100
+#define MAX_NAME_LENGTH 32
 
 // Structure pour les métadonnées de la sauvegarde
 typedef struct {
@@ -15,6 +16,7 @@ typedef struct {
     char saveName[64];         // Nom de la sauvegarde
     char player1Name[32];      // Nom du joueur 1
     char player2Name[32];      // Nom du joueur 2
+    bool isCompleteGame;       // Indique si la sauvegarde contient l'historique complet des mouvements
 } SaveMetadata;
 
 

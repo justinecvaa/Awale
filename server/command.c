@@ -459,10 +459,16 @@ void handleChallengeResponse(Client* client, const char* response, ServerContext
 // Gérer un coup reçu d'un client -- command
 void handleGameMove(int sessionId, Client* client, const char* buffer, ServerContext* context) {
     GameSession* session = &context->gameSessions[sessionId];
+
+    // Vérification des pointeurs des joueurs
+    if (session->player1 == NULL || session->player2 == NULL) {
+        write_client(client->sock, "Error: One or both players are not initialized.\n");
+        return;
+    }
     
     // Vérifier si c'est bien le tour du joueur
     Client* currentPlayer = (session->currentPlayerIndex == 0) ? session->player1 : session->player2;
-    printf("turnCount : %d\n", session->game.turnCount);
+    //printf("turnCount : %d\n", session->game.turnCount);
 
 
     if (strncmp(buffer, "save state", 10) == 0) {
@@ -479,7 +485,7 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         return;
     }
 
-    if (strncmp(buffer, "load", 4) == 0){
+    if (strncmp(buffer, "load state", 10) == 0){
         if(session->game.turnCount > 0){
             write_client(client->sock, "Game already started. You can't load a game now.\n");
             return;
@@ -488,7 +494,6 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         handleLoadCommand(session, client, buffer + 4);
         return;
     }
-
 
 
     if (strncmp(buffer, "quit", 4) == 0) {
@@ -591,32 +596,61 @@ void handleSaveGameCommand(Client* client, const char* message, AwaleGame *game)
     }
 }
 
-// Fonction pour charger une partie sauvegardée -- command
-void handleLoadCommand(GameSession* session, Client* client, const char* message){
-    if (message == NULL || strlen(message) == 0)
-    {
+void handleLoadCommand(GameSession* session, Client* client, const char* message) {
+    if (message == NULL || strlen(message) == 0) {
         write_client(client->sock, "Usage: load <save_name>\n");
         return;
     }
+
+    // Vérification des pointeurs des joueurs
+    if (session->player1 == NULL || session->player2 == NULL) {
+        write_client(client->sock, "Error: One or both players are not initialized.\n");
+        return;
+    }
+
     write_client(session->player2->sock, "Loading game...\n");
     write_client(session->player1->sock, "Loading game...\n");
-    if (loadGame(&session->game, message+1, session->player1->name, session->player2->name))
-    {
+
+    // Charger le jeu
+    if (loadGame(&session->game, message + 1, session->player1->name, session->player2->name)) {
         char response[BUF_SIZE];
-        snprintf(response, sizeof(response), "Game loaded successfully from '%s'\n", message+1);
-        write_client(session->player2->sock, response); 
+        snprintf(response, sizeof(response), "Game loaded successfully from '%s'\n", message + 1);
+        write_client(session->player2->sock, response);
         write_client(session->player1->sock, response);
 
+        // Sérialisation du jeu
         char serializedGame[BUF_SIZE];
         serializeGame(&session->game, serializedGame, sizeof(serializedGame));
         write_client(session->player1->sock, serializedGame);
         write_client(session->player2->sock, serializedGame);
-    }
-    else
-    {
-        write_client(client->sock, "Failed to load game.\n");
+
+        // Indiquer quel joueur doit jouer
+        if (session->game.currentPlayer == 0) {
+            write_client(session->player1->sock, "It's your turn to play.\n");
+            write_client(session->player2->sock, "Waiting for other player's move.\n");
+            session->currentPlayerIndex = 0;
+        } else {
+            write_client(session->player2->sock, "It's your turn to play.\n");
+            write_client(session->player1->sock, "Waiting for other player's move.\n");
+            session->currentPlayerIndex = 1;
+        }
+
+        // Initialiser les spectateurs
+        session->spectatorCount = 0;
+        memset(session->spectators, 0, sizeof(session->spectators));
+
+        // Réinitialiser l'état d'attente de mouvement
+        session->waitingForMove = true;
+        session->lastActivity = time(NULL);
+        session->game.gameOver = false;
+        //session->game.turnCount = 0;
+
+    } else {
+        write_client(session->player1->sock, "Failed to load game. File couldn't be opened or the player names are not the same.\n");
+        write_client(session->player2->sock, "Failed to load game. File couldn't be opened or the player names are not the same.\n");
     }
 }
+
 
 // Fonction pour gérer l'écriture ou lecture de biographie -- command
 void handleBiography(Client* client, const char* message, ServerContext* context) {
@@ -895,7 +929,7 @@ void handleHelp(Client* client) {
     write_client(client->sock, "quit: Exit a game");
     write_client(client->sock, "save state <save_name>: Save the state of the game");
     write_client(client->sock, "save game <save_name>: Save the game");
-    write_client(client->sock, "load <save_name>: Load a game");
+    write_client(client->sock, "load state <save_name>: Load a game state to continue playing");
     write_client(client->sock, "list saves: List all saved games");
     write_client(client->sock, "elo: View your ELO rating");
     write_client(client->sock, "exit: Disconnect from the server");

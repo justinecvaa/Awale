@@ -109,79 +109,121 @@ bool verifyMove(AwaleGame* game, int house) {
     return true;
 }
 // Effectue un coup
-bool makeMove(AwaleGame* game, int house) {
-    // Vérifier si le coup est valide
-
-    if (!verifyMove(game, house)) {
+// Effectue un coup
+bool makeMove(AwaleGame *game, int house) {
+    if (game == NULL) {
+        printf("Debug - Error: game pointer is NULL\n");
         return false;
     }
 
-    int seeds = game->board[game->currentPlayer][house];
-    game->board[game->currentPlayer][house] = 0;
+    // Vérification des limites
+    if (house < 0 || house >= 6) {
+        printf("Debug - Error: house index out of bounds: %d\n", house);
+        return false;
+    }
+
+    // Déterminer la rangée du joueur actuel et de l'adversaire
+    int currentRow = game->currentPlayer;
+    int otherRow = 1 - currentRow;
+
+    // Vérifier si la case est vide
+    if (game->board[currentRow][house] == 0) {
+        printf("Debug - Error: selected house is empty\n");
+        return false;
+    }
+
+    // Sauvegarder le nombre de graines
+    int seeds = game->board[currentRow][house];
+    game->board[currentRow][house] = 0;
+
+    // Position actuelle
     int currentHouse = house;
-    int currentPlayer = game->currentPlayer;
+    int currentSide = currentRow;
 
-    // Distribution des graines
+    // Distribuer les graines
     while (seeds > 0) {
+        // Avancer à la prochaine case
         currentHouse++;
-        if (currentHouse == HOUSES) {
+        if (currentHouse >= 6) {
             currentHouse = 0;
-            currentPlayer = 1 - currentPlayer;
+            currentSide = 1 - currentSide;
         }
-        if (currentPlayer != game->currentPlayer || currentHouse != house) {
-            game->board[currentPlayer][currentHouse]++;
-            seeds--;
-        }
-    }
 
-    bool allSeeds = false;
-    //Si le coup doit prendre toutes les graines adverses, il ne prend rien
-    if(currentHouse == 5 && currentPlayer != game->currentPlayer){ //Si la derniere graine tombe dans la maison 5 adverse, on verifie combien de cases on prend après
-        allSeeds = true;
-        while (allSeeds && currentHouse >= 0) {
-            if (game->board[currentPlayer][currentHouse] != 2 && game->board[currentPlayer][currentHouse] != 3) { //Si on trouve une case qu'on ne peut pas prendre, on part en prise normale
-                allSeeds = false;
-            }
-            currentHouse--;
+        // Ne pas semer dans la case de départ
+        if (currentSide == currentRow && currentHouse == house) {
+            continue;
         }
-    }
 
+        // Semer une graine
+        game->board[currentSide][currentHouse]++;
+        seeds--;
+
+    }
 
     // Capture des graines
-    while (!allSeeds && currentPlayer != game->currentPlayer && 
-           (game->board[currentPlayer][currentHouse] == 2 || 
-            game->board[currentPlayer][currentHouse] == 3)) {
-        game->score[game->currentPlayer] += game->board[currentPlayer][currentHouse];
-        game->board[currentPlayer][currentHouse] = 0;
+    while (currentSide == otherRow && 
+           (game->board[currentSide][currentHouse] == 2 || 
+            game->board[currentSide][currentHouse] == 3)) {
+        
+        // Capturer les graines
+        game->score[currentRow] += game->board[currentSide][currentHouse];
+        game->board[currentSide][currentHouse] = 0;
+
+        // Reculer d'une case
         currentHouse--;
         if (currentHouse < 0) {
-            currentHouse = HOUSES - 1;
-            currentPlayer = 1 - currentPlayer;
+            currentHouse = 5; // Retourner à la dernière case
+            currentSide = 1 - currentSide; // Changer de côté
         }
     }
 
-    // Mise à jour de l'historique des mouvements
-    if (game->moveCount < MAX_MOVES) {
-        // Créer un nouveau mouvement et le remplir
-        AwaleMove newMove;
-        newMove.timestamp = time(NULL); // L'heure à laquelle le mouvement a été effectué
-        strncpy(newMove.playerName, game->playerNames[game->currentPlayer], 50);
-        newMove.move = house;
-        memcpy(newMove.board, game->board, sizeof(game->board)); // Copie de l'état actuel du plateau
-        memcpy(newMove.score, game->score, sizeof(game->score)); // Copie des scores
-        strncpy(newMove.playerName, game->playerNames[game->currentPlayer], 50);
-        // Ajouter le mouvement à l'historique
-        game->moveHistory[game->moveCount] = newMove;
-        game->moveCount++;  // Incrémenter le compteur de mouvements
+    // Vérifier si le jeu est terminé
+    bool gameEnded = true;
+    for (int i = 0; i < 6; i++) {
+        if (game->board[0][i] > 0 || game->board[1][i] > 0) {
+            gameEnded = false;
+            break;
+        }
     }
 
+    if (gameEnded) {
+        game->gameOver = true;
+        // Déterminer le gagnant
+        if (game->score[0] > game->score[1]) {
+            game->winner = 0;
+        } else if (game->score[1] > game->score[0]) {
+            game->winner = 1;
+        } else {
+            game->winner = -1; // Match nul
+        }
+    }
+
+    // Mise à jour du joueur courant après vérification
+    if (!game->gameOver) {
+        game->currentPlayer = 1 - game->currentPlayer;
+    }
+
+
+    // Mettre à jour l'histoire des mouvements
+    if (game->moveCount < MAX_MOVES) {
+        AwaleMove* move = &game->moveHistory[game->moveCount];
+        move->timestamp = time(NULL);
+        strcpy(move->playerName, game->playerNames[game->currentPlayer]);
+        move->move = house;
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < HOUSES; j++) {
+                move->board[i][j] = game->board[i][j];
+            }
+        }
+        move->score[0] = game->score[0];
+        move->score[1] = game->score[1];
+        game->moveCount++;
+    }
     game->lastMove = house;
-    sprintf(game->message, "Player %d played house %d", game->currentPlayer + 1, house + 1);
-    game->currentPlayer = 1 - game->currentPlayer;
-    
-    checkGameOver(game);
+
     return true;
 }
+
 
 // Fonction pour convertir l'état du jeu en chaîne de caractères pour le réseau
 void serializeGame(const AwaleGame* game, char* buffer, size_t bufferSize) {

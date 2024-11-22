@@ -152,6 +152,7 @@ bool saveGame(const AwaleGame *game, const char *saveName, const char *player1Na
     strncpy(saveGame.metadata.saveName, saveName, sizeof(saveGame.metadata.saveName) - 1);
     strncpy(saveGame.metadata.player1Name, player1Name, sizeof(saveGame.metadata.player1Name) - 1);
     strncpy(saveGame.metadata.player2Name, player2Name, sizeof(saveGame.metadata.player2Name) - 1);
+    saveGame.metadata.isCompleteGame = false; // Indique que c'est une sauvegarde d'état
 
     // Créer le nom du fichier de sauvegarde
     char filename[128];
@@ -203,6 +204,7 @@ bool saveCompleteGame(const AwaleGame *game, const char *saveName, const char *p
     strncpy(saveGame.metadata.saveName, saveName, sizeof(saveGame.metadata.saveName) - 1);
     strncpy(saveGame.metadata.player1Name, player1Name, sizeof(saveGame.metadata.player1Name) - 1);
     strncpy(saveGame.metadata.player2Name, player2Name, sizeof(saveGame.metadata.player2Name) - 1);
+    saveGame.metadata.isCompleteGame = true; // Indique que c'est une sauvegarde complète
 
     // Créer le nom du fichier de sauvegarde
     char filename[128];
@@ -256,20 +258,44 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
         return false;
     }
 
+    // Vérifier si c'est un état ou un jeu complet
+    if (saveGame.metadata.isCompleteGame) {
+        printf("Error: The save file '%s' is a complete game, not a game state\n", saveName);
+        return false;
+    }
+
     // Copier les données
     memcpy(game, &saveGame.game, sizeof(AwaleGame));
 
-    if (player1Name)
+    // Récupérer le joueur actuel
+    game->currentPlayer = saveGame.game.currentPlayer;
+
+    if ((strcmp(player1Name, saveGame.metadata.player1Name) == 0 && strcmp(player2Name, saveGame.metadata.player2Name) == 0) || (strcmp(player1Name, saveGame.metadata.player2Name) == 0 && strcmp(player2Name, saveGame.metadata.player1Name) == 0))
     {
-        strcpy(player1Name, saveGame.metadata.player1Name);
+        if (strcmp(player2Name, saveGame.metadata.player1Name) == 0)
+        {
+            strcpy(player1Name, saveGame.metadata.player1Name);
+            strcpy(player2Name, saveGame.metadata.player2Name);
+        }
+        else if (strcmp(player1Name, saveGame.metadata.player2Name) == 0)
+        {
+            strcpy(player1Name, saveGame.metadata.player2Name);
+            strcpy(player2Name, saveGame.metadata.player1Name);
+        }
+
+
+        strcpy(game->playerNames[0], player1Name);
+        strcpy(game->playerNames[1], player2Name);
+
+        printf("Game '%s' loaded successfully\n", saveName);
+        return true;
+        
     }
-    if (player2Name)
-    {
-        strcpy(player2Name, saveGame.metadata.player2Name);
+    else {
+        printf("Error: Player names are not the same\n");
+        return false;
     }
 
-    printf("Game '%s' loaded successfully\n", saveName);
-    return true;
 }
 
 
