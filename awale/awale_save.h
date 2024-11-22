@@ -31,7 +31,7 @@ typedef struct {
 // Fonctions publiques pour la gestion des sauvegardes
 bool saveGame(const AwaleGame* game, const char* saveName, const char* player1Name, const char* player2Name);
 bool saveCompleteGame(const AwaleGame* game, const char* saveName, const char* player1Name, const char* player2Name, const AwaleMove* moves, size_t moveCount);
-bool loadGame(AwaleGame* game, const char* saveName, char* player1Name, char* player2Name);
+bool loadGame(AwaleGame* game, const char* saveName, char* player1Name, char* player2Name, bool *wasSwapped);
 SaveMetadata* listSaves(int* nbSaves);
 
 #endif // AWALE_SAVE_H

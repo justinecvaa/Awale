@@ -235,12 +235,11 @@ bool saveCompleteGame(const AwaleGame *game, const char *saveName, const char *p
 }
 
 
-bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *player2Name)
+bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *player2Name, bool *wasSwapped)
 {
     printf("FileName: %s\n", saveName);
     char filename[128];
     snprintf(filename, sizeof(filename), "saves/%s.awale", saveName);
-
     FILE *file = fopen(filename, "rb");
     if (!file)
     {
@@ -251,51 +250,68 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
     AwaleSaveGame saveGame;
     size_t read = fread(&saveGame, sizeof(AwaleSaveGame), 1, file);
     fclose(file);
-
     if (read != 1)
     {
         printf("Error: Failed to read save file\n");
         return false;
     }
 
-    // Vérifier si c'est un état ou un jeu complet
-    if (saveGame.metadata.isCompleteGame) {
+    if (saveGame.metadata.isCompleteGame)
+    {
         printf("Error: The save file '%s' is a complete game, not a game state\n", saveName);
         return false;
     }
 
-    // Copier les données
-    memcpy(game, &saveGame.game, sizeof(AwaleGame));
+    bool player1Found = (strcmp(player1Name, saveGame.metadata.player1Name) == 0) || 
+                       (strcmp(player1Name, saveGame.metadata.player2Name) == 0);
+    bool player2Found = (strcmp(player2Name, saveGame.metadata.player1Name) == 0) || 
+                       (strcmp(player2Name, saveGame.metadata.player2Name) == 0);
 
-    // Récupérer le joueur actuel
-    game->currentPlayer = saveGame.game.currentPlayer;
-
-    if ((strcmp(player1Name, saveGame.metadata.player1Name) == 0 && strcmp(player2Name, saveGame.metadata.player2Name) == 0) || (strcmp(player1Name, saveGame.metadata.player2Name) == 0 && strcmp(player2Name, saveGame.metadata.player1Name) == 0))
+    if (!player1Found || !player2Found)
     {
-        if (strcmp(player2Name, saveGame.metadata.player1Name) == 0)
-        {
-            strcpy(player1Name, saveGame.metadata.player1Name);
-            strcpy(player2Name, saveGame.metadata.player2Name);
-        }
-        else if (strcmp(player1Name, saveGame.metadata.player2Name) == 0)
-        {
-            strcpy(player1Name, saveGame.metadata.player2Name);
-            strcpy(player2Name, saveGame.metadata.player1Name);
-        }
-
-
-        strcpy(game->playerNames[0], player1Name);
-        strcpy(game->playerNames[1], player2Name);
-
-        printf("Game '%s' loaded successfully\n", saveName);
-        return true;
-        
-    }
-    else {
-        printf("Error: Player names are not the same\n");
+        printf("Error: One or both players are not found in the save file\n");
         return false;
     }
 
+    bool needSwap = false;
+    int originalCurrentPlayer = saveGame.game.currentPlayer;
+    
+    if ((strcmp(player1Name, saveGame.metadata.player2Name) == 0) ||
+        (strcmp(player2Name, saveGame.metadata.player1Name) == 0))
+    {
+        needSwap = true;
+    }
+
+    memcpy(game, &saveGame.game, sizeof(AwaleGame));
+    strcpy(game->playerNames[0], player1Name);
+    strcpy(game->playerNames[1], player2Name);
+
+    if (needSwap)
+    {
+        int tempScore = game->score[0];
+        game->score[0] = game->score[1];
+        game->score[1] = tempScore;
+        
+        for (int i = 0; i < 6; i++)
+        {
+            int tempHoles = game->board[0][i];
+            game->board[0][i] = game->board[1][i];
+            game->board[1][i] = tempHoles;
+        }
+        
+        game->currentPlayer = 1 - originalCurrentPlayer;
+    }
+    else
+    {
+        game->currentPlayer = originalCurrentPlayer;
+    }
+
+    *wasSwapped = needSwap;
+
+    printf("Game '%s' loaded successfully\n", saveName);
+    printf("Current player to play: %s\n", 
+           game->currentPlayer == 0 ? player1Name : player2Name);
+    return true;
 }
 
 

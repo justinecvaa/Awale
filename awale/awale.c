@@ -177,6 +177,10 @@ bool makeMove(AwaleGame *game, int house) {
         }
     }
 
+    char message[256];
+    snprintf(message, sizeof(message), "%s played house %d", game->playerNames[game->currentPlayer], house + 1);
+    strcpy(game->message, message);
+
     // Vérifier si le jeu est terminé
     bool gameEnded = true;
     for (int i = 0; i < 6; i++) {
