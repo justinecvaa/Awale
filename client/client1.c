@@ -53,6 +53,7 @@ static void app(const char *address, const char *name) {
 
     struct message msg;
     fd_set rdfs;
+    AwaleGame game;
 
     while(running) {
         FD_ZERO(&rdfs);
@@ -86,7 +87,16 @@ static void app(const char *address, const char *name) {
                 printf("Server disconnected!\n");
                 break;
             }
-            puts(msg.content);
+            // Vérifier le contenu du message
+            if (strncmp(msg.content, "game:", 5) == 0)
+            {
+                deserializeGame(&game, msg.content);
+                printGame(&game, name);
+            }
+            else
+            {
+                puts(msg.content);
+            }
         }
     }
 
