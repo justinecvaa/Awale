@@ -10,6 +10,7 @@
 #include "../awale/awale.h"
 #include "../awale/awale_save.h"
 #include "../message.h"
+#include "../client/client_persistence.h"
 
 
 // Fonction qui attribue le message d'un joueur à une commande -- server
@@ -286,6 +287,10 @@ void handleClientDisconnect(int clientIndex, ServerContext* context) {
             if (otherPlayer->sock != INVALID_SOCKET) {
                 write_client(otherPlayer->sock, "Your opponent has disconnected. Game Over!\n");
             }
+
+            // Mettre à jour les ELO
+            updateElo(session->player1, session->player2, (session->player1 == client) ? 1 : 0);
+            printUpdatedElo(session->player1, session->player2);
         }
 
         // Nettoyer les spectateurs
@@ -703,6 +708,7 @@ void handleBiography(Client* client, const char* message, ServerContext* context
         strncpy(client->biography, message + 6, BUF_SIZE - 1);
         client->biography[BUF_SIZE - 1] = '\0';  // Assurer la terminaison
         write_client(client->sock, "Biography updated.\n");
+        saveClientData(client);
     } 
     // Pour lire une biographie
     else if (strncmp(message, "read", 4) == 0) {
@@ -831,6 +837,8 @@ void handleFriendResponse(Client* client, const char* response, ServerContext* c
             
             write_client(client->sock, confirmMsg1);
             write_client(requester->sock, confirmMsg2);
+            saveClientData(client);
+            saveClientData(requester);
         }
     }
     else if (strcmp(response, "reject") == 0) {
@@ -943,6 +951,7 @@ void handlePrivacy(Client* client, const char* message, ServerContext* context) 
     } else {
         write_client(client->sock, "Usage: privacy <private/friends/public>\n");
     }
+    saveClientData(client);
 }
 
 // Fonction pour gérer le message d'aide -- command
@@ -1014,6 +1023,9 @@ void handleExit(Client* client, ServerContext* context) {
         removeSpectatorFromGame(spectatingSession, client, context);
     }
 
+    //Save data
+    saveClientData(client);
+
     // Close socket
     closesocket(client->sock);
 
@@ -1022,25 +1034,35 @@ void handleExit(Client* client, ServerContext* context) {
 }
 
 // Fonction pour gérer les nouvelles connexions-- command
-void handleNewConnection(ServerContext* context){
+void handleNewConnection(ServerContext* context) {
     struct message msg;
     SOCKADDR_IN csin = {0};
-            socklen_t sinsize = sizeof csin;
-            int csock = accept(context->serverSocket, (SOCKADDR *)&csin, &sinsize);
-            if(csock == SOCKET_ERROR) {
-                perror("accept()");
-                return;
-            }
+    socklen_t sinsize = sizeof csin;
+    int csock = accept(context->serverSocket, (SOCKADDR *)&csin, &sinsize);
+    if(csock == SOCKET_ERROR) {
+        perror("accept()");
+        return;
+    }
+    
     if(read_client(csock, &msg) <= 0) {
         return;
     }
 
-    /* after connecting the client sends its name */
     context->maxSocket = csock > context->maxSocket ? csock : context->maxSocket;
 
-    // Demander et vérifier si le nom est déjà pris
-    Client c = {csock};
+    Client c = {0};  // Initialiser à zéro toute la structure
+    c.sock = csock;
     strncpy(c.name, msg.content, BUF_SIZE - 1);
+    
+    // Initialiser les valeurs par défaut
+    c.biography[0] = 0;
+    c.elo = 1000;
+    c.privacy = PUBLIC;
+    c.challengedBy = -1;
+    c.inGameOpponent = -1;
+    c.friendCount = 0;
+    c.friendRequestBy = -1;
+    c.lastInterlocutorIndex = -1;
 
     // Vérification du nom
     c.validName = 1;
@@ -1049,14 +1071,19 @@ void handleNewConnection(ServerContext* context){
         write_client(c.sock, "Name: ");
         c.validName = 0;
     }
-    c.biography[0] = 0;
-    c.challengedBy = -1;
-    c.inGameOpponent = -1;
-    c.friendCount = 0;
-    c.friendRequestBy = -1;
-    c.privacy = PUBLIC;
-    c.elo = 1000;
-    c.lastInterlocutorIndex = -1;
+
+    if(c.validName) {
+        ClientData data;
+        if (loadClientData(c.name, &data)) {
+            strncpy(c.biography, data.biography, BUF_SIZE - 1);
+            c.elo = data.elo;
+            c.privacy = data.privacy;
+            c.friendCount = data.friendCount;
+            for (int j = 0; j < data.friendCount; j++) {
+                strncpy(c.friendList[j], data.friendList[j], BUF_SIZE - 1);
+            }
+        }
+    }
 
     context->clients[context->actualClients] = c;
     context->actualClients++;

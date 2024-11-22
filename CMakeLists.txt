@@ -17,6 +17,7 @@ set(SERVER_SOURCES
 set(AWALE_SOURCES
     awale/awale.c
     awale/awale_save.c
+    client/client_persistence.c
 )
 
 # Create awale library

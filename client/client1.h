@@ -32,8 +32,6 @@ typedef struct in_addr IN_ADDR;
 #define CRLF     "\r\n"
 #define PORT     1977
 
-
-
 static void init(void);
 static void end(void);
 static void app(const char *address, const char *name);
@@ -41,5 +39,6 @@ static int init_connection(const char *address);
 static void end_connection(int sock);
 static int read_server(SOCKET sock, struct message *msg);
 static void write_server(SOCKET sock, const char *buffer);
+static void handle_sigint(int sig);
 
 #endif /* guard */

@@ -32,17 +32,28 @@ static void end(void)
 static SOCKET global_sock = INVALID_SOCKET;
 static volatile sig_atomic_t running = 1;
 
+static void handle_sigint(int sig) {
+    running = 0;
+    if (global_sock != INVALID_SOCKET) {
+        write_server(global_sock, "quit");
+        usleep(100000); // 100ms pause
+        closesocket(global_sock);
+        global_sock = INVALID_SOCKET;
+    }
+}
+
+
 static void app(const char *address, const char *name) {
     SOCKET sock = init_connection(address);
-    global_sock = sock;  // Stocker le socket globalement pour le gestionnaire de signal
-    struct message msg;
-    fd_set rdfs;
+    global_sock = sock;
 
-    // Installer le gestionnaire de signal
     signal(SIGINT, handle_sigint);
 
-    /* send our name */
     write_server(sock, name);
+
+    struct message msg;
+    fd_set rdfs;
+    AwaleGame game;
 
     while(running) {
         FD_ZERO(&rdfs);
@@ -76,25 +87,23 @@ static void app(const char *address, const char *name) {
                 printf("Server disconnected!\n");
                 break;
             }
-            puts(msg.content);
+            // Vérifier le contenu du message
+            if (strncmp(msg.content, "game:", 5) == 0)
+            {
+                deserializeGame(&game, msg.content);
+                printGame(&game, name);
+            }
+            else
+            {
+                puts(msg.content);
+            }
         }
     }
 
-    // Envoyer un message de déconnexion si possible
-    if (sock != INVALID_SOCKET) {
-        write_server(sock, "quit");
-        end_connection(sock);
-    }
+    end_connection(sock);
     global_sock = INVALID_SOCKET;
 }
 
-// Gestionnaire de signal pour Ctrl+C
-static void handle_sigint(int sig) {
-    running = 0;
-    if (global_sock != INVALID_SOCKET) {
-        closesocket(global_sock);
-    }
-}
 
 static int init_connection(const char *address)
 {
