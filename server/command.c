@@ -287,6 +287,10 @@ void handleClientDisconnect(int clientIndex, ServerContext* context) {
             if (otherPlayer->sock != INVALID_SOCKET) {
                 write_client(otherPlayer->sock, "Your opponent has disconnected. Game Over!\n");
             }
+
+            // Mettre à jour les ELO
+            updateElo(session->player1, session->player2, (session->player1 == client) ? 1 : 0);
+            printUpdatedElo(session->player1, session->player2);
         }
 
         // Nettoyer les spectateurs

@@ -191,6 +191,10 @@ void updateElo(Client* player1, Client* player2, int winner) {
     int newElo2 = player2->elo + k * (score2 - expected2);
     player1->elo = newElo1;
     player2->elo = newElo2;
+
+    // Mettre à jour les fichiers de sauvegarde
+    saveClientData(player1);
+    saveClientData(player2);
 }
 
 void remove_client(Client* clients, int indexToRemove, int* actualClients) {
