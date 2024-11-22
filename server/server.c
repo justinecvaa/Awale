@@ -17,11 +17,8 @@ static ServerContext* context;
 // Main application loop -- server
 static void app(void) {
     SOCKET sock = init_connection();
-    printf("Server started on port %d\n", PORT);
     context = malloc(sizeof(ServerContext));
-    printf("Server started on port %d\n", PORT);
     initServerContext(context, sock);
-    printf("Server started on port %d\n", PORT);
     struct message msg;
     fd_set rdfs;
 
@@ -139,9 +136,7 @@ static void end(void) {
 int main(int argc, char **argv) {
     srand(time(NULL));
     init();
-    printf("Server started on port %d\n", PORT);
     app();
-    printf("Server stopped\n");
     end();
     return EXIT_SUCCESS;
 }

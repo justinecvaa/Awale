@@ -87,6 +87,10 @@ void processClientMessage(Client* client, const char* message, ServerContext* co
         char * response = message + 3;
         handleAnswer(client, response, context);
     }
+    else if(strncmp(message,"list saves", 10) == 0){
+        listSavesFiles(client);
+        return;
+    }
     else {
         handleGameOrChat(client, message, context);
     }
@@ -226,6 +230,39 @@ void handleWatchRequest(Client* client, const char* request, ServerContext* cont
         }
     }
     free(player1_name); // Libérer la mémoire allouée par strdup
+}
+
+void listSavesFiles(Client* client){
+    int nbSaves = 0;
+    SaveMetadata* saves = listSaves(&nbSaves);
+    
+    if (saves == NULL || nbSaves == 0) {
+        printf("No saves found.\n");
+        return;
+    }
+    
+    write_client(client->sock, "\nAvailable saves:\n");
+    write_client(client->sock, "----------------\n");
+    for (int i = 0; i < nbSaves; i++) {
+        char saveInfo[BUF_SIZE];
+        char timeStr[26] = {0};
+        time_t timestamp = saves[i].timestamp;
+        #ifdef _WIN32
+        ctime_s(timeStr, sizeof(timeStr), &timestamp);
+        #else
+        ctime_r(&timestamp, timeStr);
+        #endif
+        timeStr[24] = '\0';  // Remove newline
+        
+        snprintf(saveInfo, sizeof(saveInfo), "- %s\n Players: %s vs %s\n Date: %s\n\n",
+                 saves[i].saveName ? saves[i].saveName : "Unknown",
+                 saves[i].player1Name[0] ? saves[i].player1Name : "Unknown",
+                 saves[i].player2Name[0] ? saves[i].player2Name : "Unknown",
+                 timeStr);
+        write_client(client->sock, saveInfo);
+    }
+    
+    free(saves);
 }
 
 // Fonction pour gérer la déconnexion d'un client -- command
@@ -452,10 +489,7 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         return;
     }
 
-    if(strncmp(buffer,"list saves", 10) == 0){
-        listSaves();
-        return;
-    }
+
 
     if (strncmp(buffer, "quit", 4) == 0) {
         // Quitter la partie
@@ -953,6 +987,7 @@ void handleNewConnection(ServerContext* context){
 
     context->clients[context->actualClients] = c;
     context->actualClients++;
+    write_client(c.sock, "Welcome to the server!\n");
 }
 
 // Fonction pour démarrer une partie -- not sure
@@ -960,6 +995,10 @@ void startGame(int sessionId, Client* client1, Client* client2, ServerContext* c
     GameSession* session = &context->gameSessions[sessionId];
     char serializedGame[BUF_SIZE];
     serializeGame(&session->game, serializedGame, sizeof(serializedGame));
+
+    //Mettre challenge à -1 pour les deux joueurs
+    client1->challengedBy = -1;
+    client2->challengedBy = -1;
     
     write_client(client1->sock, "Game starting! ");
     write_client(client2->sock, "Game starting! ");

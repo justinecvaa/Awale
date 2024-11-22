@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <time.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -13,6 +14,7 @@
 #else
 #include <dirent.h>
 #include <unistd.h>
+#include <limits.h>
 #endif
 #include <linux/limits.h>
 
@@ -270,97 +272,109 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
     return true;
 }
 
-void listSaves(void)
-{
-    printf("\nAvailable saves:\n");
-    printf("----------------\n");
+
+// Modified SaveMetadata loading function
+SaveMetadata* listSaves(int* nbSaves) {
+    ensureSaveDirectoryExists();
+    *nbSaves = 0;
+    SaveMetadata* savesList = NULL;
+    int currentSize = 0;
 
 #ifdef _WIN32
     WIN32_FIND_DATA findData;
     HANDLE hFind = FindFirstFile("saves\\*.awale", &findData);
-    if (hFind != INVALID_HANDLE_VALUE)
-    {
-        do
-        {
-            if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-            {
-                char saveName[64];
+    
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                currentSize++;
+                SaveMetadata* temp = realloc(savesList, currentSize * sizeof(SaveMetadata));
+                if (temp == NULL) {
+                    free(savesList);
+                    FindClose(hFind);
+                    return NULL;
+                }
+                savesList = temp;
+                SaveMetadata* currentSave = &savesList[currentSize - 1];
+                
+                // Initialize all fields to 0/empty
+                memset(currentSave, 0, sizeof(SaveMetadata));
+                
+                // Copy filename without extension
+                char saveName[64] = {0};
                 strncpy(saveName, findData.cFileName, sizeof(saveName) - 1);
-                char *ext = strstr(saveName, ".awale");
-                if (ext)
-                    *ext = '\0';
-
-                AwaleSaveGame saveGame;
+                char* ext = strstr(saveName, ".awale");
+                if (ext) *ext = '\0';
+                
+                strncpy(currentSave->saveName, saveName, sizeof(currentSave->saveName) - 1);
+                
+                // Read the binary save file
                 char filename[128];
-                snprintf(filename, sizeof(filename), "saves/%s.awale", saveName);
-
-                FILE *file = fopen(filename, "rb");
-                if (file)
-                {
+                snprintf(filename, sizeof(filename), "saves\\%s.awale", saveName);
+                FILE* file = fopen(filename, "rb");
+                
+                if (file) {
+                    AwaleSaveGame saveGame;
                     fread(&saveGame, sizeof(AwaleSaveGame), 1, file);
                     fclose(file);
 
-                    char timeStr[26];
-                    ctime_s(timeStr, sizeof(timeStr), &saveGame.metadata.timestamp);
-                    timeStr[24] = '\0';
-
-                    printf("- %s\n", saveName);
-                    printf("  Players: %s vs %s\n",
-                           saveGame.metadata.player1Name,
-                           saveGame.metadata.player2Name);
-                    printf("  Date: %s\n\n", timeStr);
+                    // Extract metadata from the read save game
+                    currentSave->timestamp = saveGame.metadata.timestamp;
+                    strncpy(currentSave->player1Name, saveGame.metadata.player1Name, sizeof(currentSave->player1Name) - 1);
+                    strncpy(currentSave->player2Name, saveGame.metadata.player2Name, sizeof(currentSave->player2Name) - 1);
                 }
             }
         } while (FindNextFile(hFind, &findData));
         FindClose(hFind);
     }
 #else
-    DIR *dir = opendir("saves");
-    if (dir)
-    {
-        printf("Directory opened\n");
-        struct dirent *entry;
-        while ((entry = readdir(dir)) != NULL)
-        {
-            if (strstr(entry->d_name, ".awale"))
-            {
-                printf("Found save file\n");
-                char saveName[64];
-                strncpy(saveName, entry->d_name, sizeof(saveName) - 1);
-                char *ext = strstr(saveName, ".awale");
-                if (ext)
-                    *ext = '\0';
-
-                AwaleSaveGame saveGame;
-                char filename[PATH_MAX];
-                int written = snprintf(filename, sizeof(filename), "saves/%s", entry->d_name);
-
-                if (written < 0 || written >= sizeof(filename))
-                {
-                    fprintf(stderr, "Error: Filename too long: %s\n", entry->d_name);
-                    continue; // ou return avec un code d'erreur approprié
+    DIR* dir = opendir("saves");
+    if (dir) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            if (strstr(entry->d_name, ".awale")) {
+                currentSize++;
+                SaveMetadata* temp = realloc(savesList, currentSize * sizeof(SaveMetadata));
+                if (temp == NULL) {
+                    free(savesList);
+                    closedir(dir);
+                    return NULL;
                 }
-
-                FILE *file = fopen(filename, "rb");
-                if (file)
-                {
+                savesList = temp;
+                SaveMetadata* currentSave = &savesList[currentSize - 1];
+                
+                // Initialize all fields to 0/empty
+                memset(currentSave, 0, sizeof(SaveMetadata));
+                
+                // Copy filename without extension
+                char saveName[64] = {0};
+                strncpy(saveName, entry->d_name, sizeof(saveName) - 1);
+                char* ext = strstr(saveName, ".awale");
+                if (ext) *ext = '\0';
+                
+                strncpy(currentSave->saveName, saveName, sizeof(currentSave->saveName) - 1);
+                
+                // Read the binary save file
+                char filename[128];
+                snprintf(filename, sizeof(filename), "saves/%s.awale", saveName);
+                FILE* file = fopen(filename, "rb");
+                
+                if (file) {
+                    AwaleSaveGame saveGame;
                     fread(&saveGame, sizeof(AwaleSaveGame), 1, file);
                     fclose(file);
 
-                    char timeStr[26];
-                    ctime_r(&saveGame.metadata.timestamp, timeStr);
-                    timeStr[24] = '\0';
-
-                    printf("- Nom : %s\n", saveName);
-                    printf("  Players: %s vs %s\n",
-                           saveGame.metadata.player1Name,
-                           saveGame.metadata.player2Name);
-                    printf("  Date: %s\n\n", timeStr);
+                    // Extract metadata from the read save game
+                    currentSave->timestamp = saveGame.metadata.timestamp;
+                    strncpy(currentSave->player1Name, saveGame.metadata.player1Name, sizeof(currentSave->player1Name) - 1);
+                    strncpy(currentSave->player2Name, saveGame.metadata.player2Name, sizeof(currentSave->player2Name) - 1);
                 }
             }
         }
         closedir(dir);
     }
 #endif
-}
 
+    *nbSaves = currentSize;
+    return savesList;
+}

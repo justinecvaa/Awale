@@ -65,6 +65,7 @@ static void app(const char *address, const char *name)
             msg.content[BUF_SIZE - 1] = 0;
          }
          write_server(sock, msg.content);  // Passer msg.content
+         printf("\033[1A\033[K");  // Effacer la ligne]")
       }
       else if(FD_ISSET(sock, &rdfs))
       {
