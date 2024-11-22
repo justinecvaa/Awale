@@ -11,6 +11,7 @@
 #include "../awale/awale.h"
 #include "../awale/awale_save.h"
 #include "../message.h"
+#include "../client/client_persistence.h"
 
 static ServerContext* context;
 
@@ -19,6 +20,7 @@ static void app(void) {
     SOCKET sock = init_connection();
     context = malloc(sizeof(ServerContext));
     initServerContext(context, sock);
+
     struct message msg;
     fd_set rdfs;
 
