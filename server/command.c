@@ -268,22 +268,55 @@ void listSavesFiles(Client* client){
 // Fonction pour gérer la déconnexion d'un client -- command
 void handleClientDisconnect(int clientIndex, ServerContext* context) {
     Client* client = &context->clients[clientIndex];
-    int gameSession = findClientGameSession(client, context);
-    if(gameSession != -1) {
-        GameSession* session = &context->gameSessions[gameSession];
-        Client* otherPlayer = (session->player1 == client) ? session->player2 : session->player1;
-        session->game.winner = (strcmp(client->name, session->player1->name) == 0) ? 1 : 0;
-        write_client(otherPlayer->sock, "Your opponent disconnected. Game Over!\n");
-        updateElo(session->player1, session->player2, session->game.winner);
-        printUpdatedElo(session->player1, session->player2);
-        session->isActive = 0;
-    }
-    if(client->challengedBy != -1) {
-        write_client(context->clients[client->challengedBy].sock, "The opponent disconnected, challenge cancelled.\n");
-        context->clients[client->challengedBy].challengedBy = -1;
-    }
     
-    closesocket(client->sock);
+    // Trouver et nettoyer la session de jeu
+    int gameSession = findClientGameSession(client, context);
+    if (gameSession != -1) {
+        GameSession* session = &context->gameSessions[gameSession];
+        
+        // Déterminer l'autre joueur
+        Client* otherPlayer = (session->player1 == client) ? session->player2 : session->player1;
+        
+        if (otherPlayer) {
+            // Nettoyer l'état de l'autre joueur
+            otherPlayer->inGameOpponent = -1;
+            otherPlayer->challengedBy = -1;
+            
+            // Informer l'autre joueur
+            if (otherPlayer->sock != INVALID_SOCKET) {
+                write_client(otherPlayer->sock, "Your opponent has disconnected. Game Over!\n");
+            }
+        }
+
+        // Nettoyer les spectateurs
+        for (int i = 0; i < session->spectatorCount; i++) {
+            if (session->spectators[i] && session->spectators[i]->sock != INVALID_SOCKET) {
+                write_client(session->spectators[i]->sock, "Game ended due to player disconnection.\n");
+            }
+        }
+
+        // Marquer la session comme terminée
+        session->isActive = 0;
+        session->spectatorCount = 0;
+    }
+
+    // Nettoyer les défis en cours
+    for (int i = 0; i < context->actualClients; i++) {
+        if (context->clients[i].challengedBy == clientIndex) {
+            context->clients[i].challengedBy = -1;
+        }
+        if (context->clients[i].inGameOpponent == clientIndex) {
+            context->clients[i].inGameOpponent = -1;
+        }
+    }
+
+    // Fermer le socket si ce n'est pas déjà fait
+    if (client->sock != INVALID_SOCKET) {
+        closesocket(client->sock);
+        client->sock = INVALID_SOCKET;
+    }
+
+    // Supprimer le client de la liste
     remove_client(context->clients, clientIndex, &context->actualClients);
 }
 
@@ -466,6 +499,12 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         return;
     }
     
+
+    if(!session || !session->player1 || !session->player2 || 
+        session->player1->sock == INVALID_SOCKET || session->player2->sock == INVALID_SOCKET) {
+        session->isActive = 0;
+        return;
+    }
     // Vérifier si c'est bien le tour du joueur
     Client* currentPlayer = (session->currentPlayerIndex == 0) ? session->player1 : session->player2;
     //printf("turnCount : %d\n", session->game.turnCount);

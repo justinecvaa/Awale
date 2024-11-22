@@ -27,9 +27,14 @@ static void app(void) {
         FD_SET(STDIN_FILENO, &rdfs);
         FD_SET(sock, &rdfs);
 
+        // Mettre à jour maxSocket et ajouter uniquement les sockets valides
+        context->maxSocket = sock;
         for(int i = 0; i < context->actualClients; i++) {
-            FD_SET(context->clients[i].sock, &rdfs);
-            context->maxSocket = context->clients[i].sock > context->maxSocket ? context->clients[i].sock : context->maxSocket;
+            if(context->clients[i].sock != INVALID_SOCKET) {
+                FD_SET(context->clients[i].sock, &rdfs);
+                context->maxSocket = context->clients[i].sock > context->maxSocket ? 
+                                   context->clients[i].sock : context->maxSocket;
+            }
         }
 
         if(select(context->maxSocket + 1, &rdfs, NULL, NULL, NULL) == -1) {
@@ -45,17 +50,13 @@ static void app(void) {
         }
         else {
             for(int i = 0; i < context->actualClients; i++) {
-                if(FD_ISSET(context->clients[i].sock, &rdfs)) {
+                if(context->clients[i].sock != INVALID_SOCKET && FD_ISSET(context->clients[i].sock, &rdfs)) {
                     Client* client = &context->clients[i];
-
-                    if(client->sock == INVALID_SOCKET) {
-                        continue;  // Skip this client as their socket is closed
-                    }
-
                     int c = read_client(client->sock, &msg);
                     
                     if(c == 0) {
                         handleClientDisconnect(i, context);
+                        i--; // Ajuster l'index car le tableau a été modifié
                         continue;
                     }
                     
@@ -65,12 +66,26 @@ static void app(void) {
         }
 
         checkGameTimeouts(context);
+        
+        // Nettoyer les clients invalides périodiquement
+        static time_t lastCleanup = 0;
+        time_t now = time(NULL);
+        if (now - lastCleanup > 60) { // Toutes les 60 secondes
+            for(int i = 0; i < context->actualClients; i++) {
+                if(context->clients[i].sock == INVALID_SOCKET) {
+                    handleClientDisconnect(i, context);
+                    i--; // Ajuster l'index car le tableau a été modifié
+                }
+            }
+            lastCleanup = now;
+        }
     }
 
     clear_clients(context->clients, context->actualClients);
     end_connection(sock);
     free(context);
 }
+
 
 
 // ************************************************************************************************

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/select.h>
 #include <stdint.h> 
+#include <signal.h>
 
 #include "client1.h"
 #include "../awale/awale.h"
@@ -28,68 +29,71 @@ static void end(void)
 #endif
 }
 
-static void app(const char *address, const char *name)
-{
-   SOCKET sock = init_connection(address);
-   struct message msg;  // Changé de buffer à message
+static SOCKET global_sock = INVALID_SOCKET;
+static volatile sig_atomic_t running = 1;
 
-   fd_set rdfs;
-   AwaleGame game;
+static void app(const char *address, const char *name) {
+    SOCKET sock = init_connection(address);
+    global_sock = sock;  // Stocker le socket globalement pour le gestionnaire de signal
+    struct message msg;
+    fd_set rdfs;
 
-   /* send our name */
-   write_server(sock, name);
+    // Installer le gestionnaire de signal
+    signal(SIGINT, handle_sigint);
 
-   while(1)
-   {
-      FD_ZERO(&rdfs);
-      FD_SET(STDIN_FILENO, &rdfs);
-      FD_SET(sock, &rdfs);
+    /* send our name */
+    write_server(sock, name);
 
-      if(select(sock + 1, &rdfs, NULL, NULL, NULL) == -1)
-      {
-         perror("select()");
-         exit(errno);
-      }
+    while(running) {
+        FD_ZERO(&rdfs);
+        FD_SET(STDIN_FILENO, &rdfs);
+        FD_SET(sock, &rdfs);
 
-      /* something from standard input : i.e keyboard */
-      if(FD_ISSET(STDIN_FILENO, &rdfs))
-      {
-         fgets(msg.content, BUF_SIZE - 1, stdin);  // Utiliser msg.content au lieu de buffer
-         char *p = strstr(msg.content, "\n");
-         if(p != NULL)
-         {
-            *p = 0;
-         }
-         else
-         {
-            msg.content[BUF_SIZE - 1] = 0;
-         }
-         write_server(sock, msg.content);  // Passer msg.content
-         printf("\033[1A\033[K");  // Effacer la ligne]")
-      }
-      else if(FD_ISSET(sock, &rdfs))
-      {
-         int n = read_server(sock, &msg);  // Passer l'adresse de msg
-         /* server down */
-         if(n == 0)
-         {
-            printf("Server disconnected !\n");
+        // Utiliser un timeout pour vérifier régulièrement running
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        if(select(sock + 1, &rdfs, NULL, NULL, &tv) == -1) {
+            if (errno == EINTR) continue;  // Interruption par signal
+            perror("select()");
             break;
-         }
-         // Vérifier le contenu du message
-         if (strncmp(msg.content, "game:", 5) == 0)
-         {
-            deserializeGame(&game, msg.content);
-            printGame(&game, name);
-         }
-         else
-         {
-            puts(msg.content);
-         }
-      }
-   }
+        }
 
-   end_connection(sock);
+        /* something from standard input : i.e keyboard */
+        if(FD_ISSET(STDIN_FILENO, &rdfs)) {
+            fgets(msg.content, BUF_SIZE - 1, stdin);
+            char *p = strstr(msg.content, "\n");
+            if(p != NULL) {
+                *p = 0;
+            } else {
+                msg.content[BUF_SIZE - 1] = 0;
+            }
+            write_server(sock, msg.content);
+        } else if(FD_ISSET(sock, &rdfs)) {
+            int n = read_server(sock, &msg);
+            if(n == 0) {
+                printf("Server disconnected!\n");
+                break;
+            }
+            puts(msg.content);
+        }
+    }
+
+    // Envoyer un message de déconnexion si possible
+    if (sock != INVALID_SOCKET) {
+        write_server(sock, "quit");
+        end_connection(sock);
+    }
+    global_sock = INVALID_SOCKET;
+}
+
+// Gestionnaire de signal pour Ctrl+C
+static void handle_sigint(int sig) {
+    running = 0;
+    if (global_sock != INVALID_SOCKET) {
+        closesocket(global_sock);
+    }
 }
 
 static int init_connection(const char *address)
