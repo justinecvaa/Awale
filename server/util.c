@@ -84,14 +84,27 @@ int createGameSession(Client* player1, Client* player2, ServerContext* context) 
     return sessionId;
 }
 
+// Fonction modifiée pour nettoyer les parties abandonnées
 void checkGameTimeouts(ServerContext* context) {
     time_t currentTime = time(NULL);
     for(int i = 0; i < MAX_GAME_SESSIONS; i++) {
         if(context->gameSessions[i].isActive) {
-            if(currentTime - context->gameSessions[i].lastActivity > 300) {
-                GameSession* session = &context->gameSessions[i];
-                write_client(session->player1->sock, "Game timed out!\n");
-                write_client(session->player2->sock, "Game timed out!\n");
+            GameSession* session = &context->gameSessions[i];
+            
+            // Vérifier si les joueurs sont toujours valides
+            if(!session->player1 || !session->player2 || 
+               session->player1->sock == INVALID_SOCKET || 
+               session->player2->sock == INVALID_SOCKET) {
+                session->isActive = 0;
+                continue;
+            }
+            
+            if(currentTime - session->lastActivity > 300) { // 5 minutes timeout
+                if(session->player1->sock != INVALID_SOCKET)
+                    write_client(session->player1->sock, "Game timed out!\n");
+                if(session->player2->sock != INVALID_SOCKET)
+                    write_client(session->player2->sock, "Game timed out!\n");
+                
                 session->isActive = 0;
                 session->player1->inGameOpponent = -1;
                 session->player2->inGameOpponent = -1;
@@ -212,45 +225,60 @@ const char* privacyToString(enum Privacy privacy) {
 // SERVER UTILS
 
 
-int read_client(SOCKET sock, struct message *msg)
-{
-    // Lire d'abord la taille
+int read_client(SOCKET sock, struct message *msg) {
+    if (sock == INVALID_SOCKET) return 0;
+
+    // Vérifier d'abord si le client est toujours connecté
+    int error = 0;
+    socklen_t len = sizeof(error);
+    int retval = getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &len);
+    
+    if (retval != 0 || error != 0) {
+        return 0;  // Socket error
+    }
+
+    // Test de connexion avec recv de 0 bytes
+    char test;
+    if (recv(sock, &test, 0, MSG_PEEK) == -1) {
+        return 0;  // Socket error
+    }
+
+    // Lire la taille avec timeout
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
     int size_read = recv(sock, &msg->size, sizeof(uint32_t), 0);
-    if (size_read != sizeof(uint32_t)) {
-        if (size_read == 0) return 0;  // Connexion fermée
-        perror("recv() size");
-        return -1;
+    if (size_read <= 0) {
+        return 0;
     }
 
-    // Vérifier que la taille est valide
     if (msg->size >= BUF_SIZE) {
-        fprintf(stderr, "Message trop grand: %u bytes\n", msg->size);
-        return -1;
+        return 0;
     }
 
-    // Lire ensuite exactement le nombre d'octets indiqué
+    // Lire le contenu
     int content_read = 0;
     int remaining = msg->size;
 
     while (remaining > 0) {
         int n = recv(sock, msg->content + content_read, remaining, 0);
         if (n <= 0) {
-            if (n == 0) return 0;  // Connexion fermée
-            perror("recv() content");
-            return -1;
+            return 0;
         }
         content_read += n;
         remaining -= n;
     }
 
-    // Ajouter le caractère nul de fin
     msg->content[msg->size] = 0;
-
     return content_read;
 }
 
-void write_client(SOCKET sock, const char *buffer)
-{
+void write_client(SOCKET sock, const char *buffer) {
+    // Vérifier que le socket est valide
+    if(sock == INVALID_SOCKET || !buffer) return;
+    
     struct message msg;
     msg.size = strlen(buffer);
     
@@ -261,25 +289,27 @@ void write_client(SOCKET sock, const char *buffer)
     
     strcpy(msg.content, buffer);
     
-    // Envoyer la taille
+    // Vérifier les erreurs d'envoi
     if (send(sock, &msg.size, sizeof(uint32_t), 0) != sizeof(uint32_t)) {
-        perror("send() size");
+        fprintf(stderr, "send() size failed\n");
         return;
     }
     
-    // Envoyer le contenu
     if (send(sock, msg.content, msg.size, 0) != msg.size) {
-        perror("send() content");
+        fprintf(stderr, "send() content failed\n");
         return;
     }
 }
 
 void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server) {
+    if (!buffer) return;
+    
     char message[BUF_SIZE];
     message[0] = 0;
     
     for(int i = 0; i < actual; i++) {
-        if(sender.sock != clients[i].sock) {
+        // Vérifier que le socket du client est valide
+        if(clients[i].sock != INVALID_SOCKET && sender.sock != clients[i].sock) {
             if(from_server == 0) {
                 strncpy(message, sender.name, BUF_SIZE - 1);
                 strncat(message, " : ", sizeof message - strlen(message) - 1);
