@@ -996,27 +996,35 @@ void handleExit(Client* client, ServerContext* context) {
 }
 
 // Fonction pour gérer les nouvelles connexions-- command
-void handleNewConnection(ServerContext* context){
+void handleNewConnection(ServerContext* context) {
     struct message msg;
     SOCKADDR_IN csin = {0};
-            socklen_t sinsize = sizeof csin;
-            int csock = accept(context->serverSocket, (SOCKADDR *)&csin, &sinsize);
-            if(csock == SOCKET_ERROR) {
-                perror("accept()");
-                return;
-            }
+    socklen_t sinsize = sizeof csin;
+    int csock = accept(context->serverSocket, (SOCKADDR *)&csin, &sinsize);
+    if(csock == SOCKET_ERROR) {
+        perror("accept()");
+        return;
+    }
+    
     if(read_client(csock, &msg) <= 0) {
         return;
     }
 
-    /* after connecting the client sends its name */
     context->maxSocket = csock > context->maxSocket ? csock : context->maxSocket;
 
-    // Demander et vérifier si le nom est déjà pris
-    Client c = {csock};
+    Client c = {0};  // Initialiser à zéro toute la structure
+    c.sock = csock;
     strncpy(c.name, msg.content, BUF_SIZE - 1);
-
-
+    
+    // Initialiser les valeurs par défaut
+    c.biography[0] = 0;
+    c.elo = 1000;
+    c.privacy = PUBLIC;
+    c.challengedBy = -1;
+    c.inGameOpponent = -1;
+    c.friendCount = 0;
+    c.friendRequestBy = -1;
+    c.lastInterlocutorIndex = -1;
 
     // Vérification du nom
     c.validName = 1;
@@ -1025,11 +1033,10 @@ void handleNewConnection(ServerContext* context){
         write_client(c.sock, "Name: ");
         c.validName = 0;
     }
-    if(c.validName){ // S'il peut se connecter
+
+    if(c.validName) {
         ClientData data;
-        printf("Client %s connected\n", c.name);
-        if (loadClientData(c.name, &data)) { // Et que le client existe en data
-            printf("Client %s data loaded\n", c.name);
+        if (loadClientData(c.name, &data)) {
             strncpy(c.biography, data.biography, BUF_SIZE - 1);
             c.elo = data.elo;
             c.privacy = data.privacy;
@@ -1038,25 +1045,7 @@ void handleNewConnection(ServerContext* context){
                 strncpy(c.friendList[j], data.friendList[j], BUF_SIZE - 1);
             }
         }
-        else{
-            printf("Client %s data not found\n", c.name);
-        c.biography[0] = 0;
-        c.elo = 1000;
-        c.privacy = PUBLIC;
-        c.friendCount = 0;
     }
-    }
-    else{
-        c.biography[0] = 0;
-        c.elo = 1000;
-        c.privacy = PUBLIC;
-        c.friendCount = 0;
-    }
-    c.challengedBy = -1;
-    c.inGameOpponent = -1;
-    c.friendCount = 0;
-    c.friendRequestBy = -1;
-    c.lastInterlocutorIndex = -1;
 
     context->clients[context->actualClients] = c;
     context->actualClients++;
