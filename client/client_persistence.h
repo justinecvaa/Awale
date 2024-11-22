@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <limits.h>
 
+#define MAX_PATH_SIZE 128
 
 // Structure pour stocker les données persistantes d'un client
 typedef struct {

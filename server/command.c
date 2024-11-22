@@ -1027,7 +1027,9 @@ void handleNewConnection(ServerContext* context){
     }
     if(c.validName){ // S'il peut se connecter
         ClientData data;
+        printf("Client %s connected\n", c.name);
         if (loadClientData(c.name, &data)) { // Et que le client existe en data
+            printf("Client %s data loaded\n", c.name);
             strncpy(c.biography, data.biography, BUF_SIZE - 1);
             c.elo = data.elo;
             c.privacy = data.privacy;
@@ -1036,6 +1038,13 @@ void handleNewConnection(ServerContext* context){
                 strncpy(c.friendList[j], data.friendList[j], BUF_SIZE - 1);
             }
         }
+        else{
+            printf("Client %s data not found\n", c.name);
+        c.biography[0] = 0;
+        c.elo = 1000;
+        c.privacy = PUBLIC;
+        c.friendCount = 0;
+    }
     }
     else{
         c.biography[0] = 0;

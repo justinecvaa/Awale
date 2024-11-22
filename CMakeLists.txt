@@ -1,41 +1,48 @@
-# Version minimale requise de CMake
 cmake_minimum_required(VERSION 3.10)
-# Nom du projet
 project(Awale C)
-# Définir le standard C à utiliser
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Créer une bibliothèque pour le code commun d'Awale
-add_library(awale_lib
+# Create directories in build folder
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/saves)
+
+# Common source files
+set(SERVER_SOURCES
+    server/server.c
+    server/command.c
+    server/util.c
+)
+
+set(AWALE_SOURCES
     awale/awale.c
     awale/awale_save.c
     client/client_persistence.c
 )
 
-# Ajouter les headers pour la bibliothèque
-target_include_directories(awale_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+# Create awale library
+add_library(awale_lib ${AWALE_SOURCES})
+target_include_directories(awale_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Create server executable
+add_executable(server ${SERVER_SOURCES})
+target_include_directories(server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(server 
+    PRIVATE 
+        awale_lib
+        m
 )
 
-# Créer l'exécutable serveur
-add_executable(server
-    server/server.c
+# Create client executable
+add_executable(client client/client1.c)
+target_include_directories(client PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(client
+    PRIVATE
+        awale_lib
 )
 
-# Lier la bibliothèque awale_lib et la bibliothèque mathématique
-target_link_libraries(server PRIVATE 
-    awale_lib 
-    m
-)
-
-# Créer l'exécutable client
-add_executable(client
-    client/client1.c
-)
-
-target_link_libraries(client PRIVATE awale_lib)
-
-# Créer un répertoire pour les fichiers de sauvegarde dans le dossier de build
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/saves)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/clients)
+# Add platform-specific libraries if needed
+if(WIN32)
+    target_link_libraries(server PRIVATE wsock32 ws2_32)
+    target_link_libraries(client PRIVATE wsock32 ws2_32)
+endif()
