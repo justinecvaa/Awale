@@ -185,8 +185,9 @@ bool makeMove(AwaleGame *game, int house) {
         }
     }
 
+    printf("Debug - Player 1 : %s, Player 2 : %s\n", game->playerNames[0], game->playerNames[1]);
     char message[256];
-    snprintf(message, sizeof(message), "%s played house %d", game->playerNames[game->currentPlayer], house + 1);
+    snprintf(message, sizeof(message), "%s played house %d", game->playerNames[currentRow], house + 1);
     strcpy(game->message, message);
     printf("Debug - %s\n", message);
 
@@ -287,22 +288,23 @@ void printGame(const AwaleGame* game, char* playerName) {
     } else {
         currentPlayer = 1;
     }
-    //printf("Joueur actuel: %d\n", currentPlayer);
+    printf("Joueur actuel: %d\n", currentPlayer);
+
 
     printf("\n%s: ", game->playerNames[1 - currentPlayer]);
     for (int i = HOUSES - 1; i >= 0; i--) {
-        printf("%2d ", game->board[currentPlayer][i]);
+        printf("%2d ", game->board[1 - currentPlayer][i]);
     }
-    printf(" | Score: %d", game->score[currentPlayer]);
+    printf(" | Score: %d", game->score[1 - currentPlayer]);
     printf("\n         ");
     for (int i = 0; i < HOUSES; i++) {
         printf("   ");
     }
     printf("\n%s: ", game->playerNames[currentPlayer]);
     for (int i = 0; i < HOUSES; i++) {
-        printf("%2d ", game->board[1 - currentPlayer][i]);
+        printf("%2d ", game->board[currentPlayer][i]);
     }
-    printf(" | Score: %d", game->score[1 - currentPlayer]);
+    printf(" | Score: %d", game->score[currentPlayer]);
     printf("\nMessage: %s\n", game->message);
 }
 

@@ -80,7 +80,13 @@ static void app(const char *address, const char *name) {
             } else {
                 msg.content[BUF_SIZE - 1] = 0;
             }
+            //Vérifier si le message est vide
+            if(strlen(msg.content) == 0) {
+                continue;
+            }
             write_server(sock, msg.content);
+            //Effacer le message dans terminal
+            printf("\033[1A\033[2K");
         } else if(FD_ISSET(sock, &rdfs)) {
             int n = read_server(sock, &msg);
             if(n == 0) {

@@ -276,7 +276,7 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
     bool needSwap = false;
     int originalCurrentPlayer = saveGame.game.currentPlayer;
     
-    if ((strcmp(player1Name, saveGame.metadata.player2Name) == 0) ||
+    if ((strcmp(player1Name, saveGame.metadata.player2Name) == 0) &&
         (strcmp(player2Name, saveGame.metadata.player1Name) == 0))
     {
         needSwap = true;
@@ -288,6 +288,7 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
 
     if (needSwap)
     {
+        printf("Swapping players and board\n");
         int tempScore = game->score[0];
         game->score[0] = game->score[1];
         game->score[1] = tempScore;
@@ -299,11 +300,11 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
             game->board[1][i] = tempHoles;
         }
         
-        game->currentPlayer = originalCurrentPlayer;
+        game->currentPlayer = 1 - originalCurrentPlayer;
     }
     else
     {
-        game->currentPlayer = 1 - originalCurrentPlayer;
+        game->currentPlayer = originalCurrentPlayer;
     }
 
     *wasSwapped = needSwap;
