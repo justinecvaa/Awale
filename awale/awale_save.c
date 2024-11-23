@@ -299,14 +299,18 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
             game->board[1][i] = tempHoles;
         }
         
-        game->currentPlayer = 1 - originalCurrentPlayer;
+        game->currentPlayer = originalCurrentPlayer;
     }
     else
     {
-        game->currentPlayer = originalCurrentPlayer;
+        game->currentPlayer = 1 - originalCurrentPlayer;
     }
 
     *wasSwapped = needSwap;
+    game->moveCount = 0;
+    game->moveHistory = malloc(MAX_MOVES * sizeof(AwaleMove));
+
+    //resetMoveHistory(game);
 
     printf("Game '%s' loaded successfully\n", saveName);
     printf("Current player to play: %s\n", 

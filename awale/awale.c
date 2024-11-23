@@ -111,6 +111,12 @@ bool verifyMove(AwaleGame* game, int house) {
 // Effectue un coup
 // Effectue un coup
 bool makeMove(AwaleGame *game, int house) {
+
+    if (!verifyMove(game, house)) {
+        return false;
+    }
+
+
     if (game == NULL) {
         printf("Debug - Error: game pointer is NULL\n");
         return false;
@@ -135,6 +141,7 @@ bool makeMove(AwaleGame *game, int house) {
     // Sauvegarder le nombre de graines
     int seeds = game->board[currentRow][house];
     game->board[currentRow][house] = 0;
+    printf("Debug - Player %d selected house %d with %d seeds\n", currentRow + 1, house, seeds);
 
     // Position actuelle
     int currentHouse = house;
@@ -157,7 +164,7 @@ bool makeMove(AwaleGame *game, int house) {
         // Semer une graine
         game->board[currentSide][currentHouse]++;
         seeds--;
-
+        printf("Debug - Seed placed in house %d on side %d, remaining seeds: %d\n", currentHouse, currentSide, seeds);
     }
 
     // Capture des graines
@@ -167,6 +174,7 @@ bool makeMove(AwaleGame *game, int house) {
         
         // Capturer les graines
         game->score[currentRow] += game->board[currentSide][currentHouse];
+        printf("Debug - Capturing %d seeds from house %d on side %d\n", game->board[currentSide][currentHouse], currentHouse, currentSide);
         game->board[currentSide][currentHouse] = 0;
 
         // Reculer d'une case
@@ -180,6 +188,7 @@ bool makeMove(AwaleGame *game, int house) {
     char message[256];
     snprintf(message, sizeof(message), "%s played house %d", game->playerNames[game->currentPlayer], house + 1);
     strcpy(game->message, message);
+    printf("Debug - %s\n", message);
 
     // Vérifier si le jeu est terminé
     bool gameEnded = true;
@@ -200,19 +209,21 @@ bool makeMove(AwaleGame *game, int house) {
         } else {
             game->winner = -1; // Match nul
         }
+        printf("Debug - Game over. Winner: %d\n", game->winner);
     }
 
     // Mise à jour du joueur courant après vérification
     if (!game->gameOver) {
         game->currentPlayer = 1 - game->currentPlayer;
+        printf("Debug - Next player: %d\n", game->currentPlayer + 1);
     }
-
 
     // Mettre à jour l'histoire des mouvements
     if (game->moveCount < MAX_MOVES) {
         AwaleMove* move = &game->moveHistory[game->moveCount];
         move->timestamp = time(NULL);
-        strcpy(move->playerName, game->playerNames[game->currentPlayer]);
+        // Utiliser le bon index de joueur pour le nom
+        strcpy(move->playerName, game->playerNames[currentRow]); // currentRow au lieu de game->currentPlayer
         move->move = house;
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < HOUSES; j++) {
@@ -222,7 +233,9 @@ bool makeMove(AwaleGame *game, int house) {
         move->score[0] = game->score[0];
         move->score[1] = game->score[1];
         game->moveCount++;
+        printf("Debug - Move recorded. Total moves: %d\n", game->moveCount);
     }
+
     game->lastMove = house;
 
     return true;
