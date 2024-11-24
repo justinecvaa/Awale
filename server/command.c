@@ -1103,6 +1103,9 @@ void startGame(int sessionId, Client* client1, Client* client2, ServerContext* c
     write_client(client1->sock, "Game starting! ");
     write_client(client2->sock, "Game starting! ");
     
+    write_client(client1->sock, serializedGame);
+    write_client(client2->sock, serializedGame);
+    
     if(session->currentPlayerIndex == 0) {
         write_client(client1->sock, "Your turn!\n");
         write_client(client2->sock, "Waiting for opponent...\n");
@@ -1110,9 +1113,6 @@ void startGame(int sessionId, Client* client1, Client* client2, ServerContext* c
         write_client(client2->sock, "Your turn!\n");
         write_client(client1->sock, "Waiting for opponent...\n");
     }
-    
-    write_client(client1->sock, serializedGame);
-    write_client(client2->sock, serializedGame);
 }
 
 // Fonction qui affiche l'elo mis à jour des joueurs -- util

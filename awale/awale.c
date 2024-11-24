@@ -15,7 +15,7 @@ void initializeGame(AwaleGame* game, const char* player1Name, const char* player
     // Initialiser les autres variables
     game->score[0] = 0;
     game->score[1] = 0;
-    game->currentPlayer = 1 - currentPlayer;
+    game->currentPlayer = currentPlayer;
     game->gameOver = false;
     game->lastMove = -1;
     game->winner = -1;
@@ -281,15 +281,11 @@ void deserializeGame(AwaleGame* game, const char* buffer) {
 // Fonction d'affichage
 void printGame(const AwaleGame* game, char* playerName) {
     int currentPlayer;
-    //printf("\nName given in funtion%s \n: ", playerName);
-    //printf("\nFirst Name in game%s \n Second Name in game %s\n: ", game->playerNames[0], game->playerNames[1]);
     if(strcmp(playerName, game->playerNames[0]) == 0){
         currentPlayer = 0;
     } else {
         currentPlayer = 1;
     }
-    printf("Joueur actuel: %d\n", currentPlayer);
-
 
     printf("\n%s: ", game->playerNames[1 - currentPlayer]);
     for (int i = HOUSES - 1; i >= 0; i--) {
@@ -305,7 +301,7 @@ void printGame(const AwaleGame* game, char* playerName) {
         printf("%2d ", game->board[currentPlayer][i]);
     }
     printf(" | Score: %d", game->score[currentPlayer]);
-    printf("\nMessage: %s\n", game->message);
+    printf("\n%s\n", game->message);
 }
 
 // Fonction d'affichage Viewer
@@ -324,63 +320,5 @@ void printGameViewer(const AwaleGame* game) {
         printf("%2d ", game->board[0][i]);
     }
     printf(" | Score: %d", game->score[0]);
-    printf("\nMessage: %s\n", game->message);
+    printf("\n%s\n", game->message);
 }
-
-
-// Fonction principale
-/*int main() {
-    AwaleGame game;
-
-    printf("1. New Game\n");
-    printf("2. Load Game\n");
-    printf("Choice: ");
-
-    int choice;
-    scanf("%d", &choice);
-    while (getchar() != '\n');
-
-    if (choice == 2) {
-        handleLoadCommand(&game);
-    }
-    if (choice == 1) {
-    initializeGame(&game);
-    }
-    char buffer[1024];
-    char input[20];
-
-    while (!game.gameOver) {
-        printGame(&game);
-        int house;
-        printf("Player %d, enter a house number (1-%d) or 'save' to save the game: ", 
-               game.currentPlayer + 1, HOUSES);
-
-        if (scanf("%19s", input) == 1) {
-            // Vérifier si c'est une commande de sauvegarde
-            if (strcmp(input, "save") == 0) {
-                handleSaveCommand(&game);
-                continue;
-            } else {
-                // Convertir l'entrée en nombre
-                house = atoi(input);
-                if (house >= 1 && house <= HOUSES) {
-                    if (makeMove(&game, house - 1)) {
-                        // Sérialisation normale pour le réseau
-                        serializeGame(&game, buffer, sizeof(buffer));
-                        printf("\nSerialized game state: %s\n", buffer);
-                        
-                        // Simuler l'envoi/réception réseau
-                        AwaleGame receivedGame;
-                        deserializeGame(&receivedGame, buffer);
-                    }
-                } else {
-                    printf("Invalid input. Please enter a number between 1 and %d or 'save'.\n", HOUSES);
-                }
-            }
-        }
-        while (getchar() != '\n'); // Vider le buffer
-    }
-    
-    printGame(&game);
-    return 0;
-}*/
