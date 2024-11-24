@@ -28,6 +28,7 @@ Ce projet implémente une version réseau du jeu traditionnel Awale (aussi connu
 - Liste des parties en cours
 - Sauvegarde des états de jeu
 - Gestion automatique des déconnexions
+- Persistance des clients
 
 ## Compilation
 
@@ -79,7 +80,7 @@ Exemple :
 ```
 
 ### 2. Lancer via script shell
-Un script est fourni pour lancer directement le serveur et plusieurs client :
+Un script est fourni pour compiler puis lancer directement le serveur et plusieurs client :
 ```bash
 ./launch_awale.sh [-i IP] [-n nb_clients] [-p prefix] [-h]
   -i : IP address (default: local IP)
