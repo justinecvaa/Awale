@@ -984,6 +984,7 @@ void handleHelp(Client* client) {
     write_client(client->sock, "privacy: View your privacy settings");
     write_client(client->sock, "all <message>: Send a message to all clients");
     write_client(client->sock, "private <name> <message>: Send a private message to a client");
+    write_client(client->sock, "private friends <message>: Send a private message to all friends");
     write_client(client->sock, "re <message>: Send a message to the last person you talked to");
     write_client(client->sock, "help: Display this help message");
     write_client(client->sock, "quit: Exit a game");
