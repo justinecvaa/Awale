@@ -37,7 +37,7 @@ void handleHelp(Client* client);
 void handleExit(Client* client, ServerContext* context);
 void handleNewConnection(ServerContext* context);
 void startGame(int sessionId, Client* client1, Client* client2, ServerContext* context);
-void printUpdatedElo(Client* player1, Client* player2);
+void printUpdatedElo(Client* player);
 void handleGameOver(GameSession* session);
 void handleAnswer(Client* client, const char* response, ServerContext* context);
 
