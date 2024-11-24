@@ -276,41 +276,34 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
     bool needSwap = (strcmp(player1Name, saveGame.metadata.player2Name) == 0);
     
     if (needSwap) {
-        printf("Swapping players and board\n");
+        printf("Swapping players\n");
         // Échange les noms des joueurs
-        strcpy(game->playerNames[0], player2Name);  // player2 devient player1
-        strcpy(game->playerNames[1], player1Name);  // player1 devient player2
+        strcpy(game->playerNames[0], player2Name);
+        strcpy(game->playerNames[1], player1Name);
         
         // Échange les scores
         int tempScore = game->score[0];
         game->score[0] = game->score[1];
         game->score[1] = tempScore;
         
-        // Échange les plateaux
-        for (int i = 0; i < 6; i++) {
-            int tempHoles = game->board[0][i];
-            game->board[0][i] = game->board[1][i];
-            game->board[1][i] = tempHoles;
-        }
-        
         // Inverse le joueur courant car les positions sont inversées
-        //game->currentPlayer = game->currentPlayer;
+        //game->currentPlayer = 1 - game->currentPlayer;
     } else {
-        // Si pas de swap, on garde les noms dans l'ordre original
         strcpy(game->playerNames[0], player1Name);
         strcpy(game->playerNames[1], player2Name);
     }
+    
+    // On garde toujours le plateau dans la même orientation que la sauvegarde originale
+    memcpy(game->board, saveGame.game.board, sizeof(game->board));
     
     *wasSwapped = needSwap;
     game->moveCount = 0;
     game->moveHistory = malloc(MAX_MOVES * sizeof(AwaleMove));
     
     printf("Game '%s' loaded successfully\n", saveName);
-    // Affiche le vrai nom du joueur qui doit jouer
     printf("Current player to play: %s\n", game->playerNames[game->currentPlayer]);
     return true;
 }
-
 
 // Modified SaveMetadata loading function
 SaveMetadata* listSaves(int* nbSaves) {
