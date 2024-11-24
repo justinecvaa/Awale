@@ -275,19 +275,21 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
     // Détermine si les joueurs sont dans un ordre différent de la sauvegarde
     bool needSwap = (strcmp(player1Name, saveGame.metadata.player2Name) == 0);
     
+   
     if (needSwap) {
-        printf("Swapping players\n");
-        // Échange les noms des joueurs
-        strcpy(game->playerNames[0], player2Name);
-        strcpy(game->playerNames[1], player1Name);
-        
-        // Échange les scores
-        int tempScore = game->score[0];
-        game->score[0] = game->score[1];
-        game->score[1] = tempScore;
-        
-        // Inverse le joueur courant car les positions sont inversées
-        //game->currentPlayer = 1 - game->currentPlayer;
+    printf("Swapping players\n");
+    // Échange les noms des joueurs
+    strcpy(game->playerNames[0], player2Name);
+    strcpy(game->playerNames[1], player1Name);
+    
+    // NE PAS échanger les scores, ils doivent rester associés à leur position sur le plateau
+    // int tempScore = game->score[0];
+    // game->score[0] = game->score[1];
+    // game->score[1] = tempScore;
+    
+    // Inverse le joueur courant car les positions sont inversées
+    game->currentPlayer = 1 - game->currentPlayer;
+    
     } else {
         strcpy(game->playerNames[0], player1Name);
         strcpy(game->playerNames[1], player2Name);
