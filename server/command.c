@@ -84,7 +84,7 @@ void processClientMessage(Client* client, const char* message, ServerContext* co
         snprintf(eloMessage, sizeof(eloMessage), "Your ELO rating: %d\n", client->elo);
         write_client(client->sock, eloMessage);
     }
-    else if(strncmp(message, "re", 2) == 0){
+    else if(strncmp(message, "re ", 3) == 0){
         char * response = message + 3;
         handleAnswer(client, response, context);
     }
@@ -309,6 +309,9 @@ void handleClientDisconnect(int clientIndex, ServerContext* context) {
     for (int i = 0; i < context->actualClients; i++) {
         if (context->clients[i].challengedBy == clientIndex) {
             context->clients[i].challengedBy = -1;
+            if (context->clients[i].sock != INVALID_SOCKET) {
+                write_client(context->clients[i].sock, "Challenge request cancelled because the other player disconnected.\n");
+            }
         }
         if (context->clients[i].inGameOpponent == clientIndex) {
             context->clients[i].inGameOpponent = -1;
@@ -320,6 +323,8 @@ void handleClientDisconnect(int clientIndex, ServerContext* context) {
         closesocket(client->sock);
         client->sock = INVALID_SOCKET;
     }
+    //Sauvegarder les données du client
+    saveClientData(client);
 
     // Supprimer le client de la liste
     remove_client(context->clients, clientIndex, &context->actualClients);
@@ -466,18 +471,20 @@ void handleChallengeResponse(Client* client, const char* response, ServerContext
             return;
         }
 
-        // bool isOnline = false;
-        // // Vérifier si l'ami est toujours en ligne
-        // for (int j = 0; j < context->actualClients; j++) {
-        //     if (strcmp(context->clients[j].name, &context->clients[opponentIndex].name) == 0) {
-        //         isOnline = true;
-        //         break;
-        //     }
-        // }
-        // if(!isOnline) {
-        //     write_client(client->sock, "The opponent disconnected, challenge cancelled.\n");
-        //     return;
-        // }
+        bool isOnline = false;
+        // Vérifier si l'ami est toujours en ligne
+        for (int j = 0; j < context->actualClients; j++) {
+            if (strcmp(context->clients[j].name, &context->clients[opponentIndex].name) == 0) {
+                printf("Opponent is online\n");
+                isOnline = true;
+                break;
+            }
+        }
+        if(!isOnline) {
+            write_client(client->sock, "The opponent disconnected, challenge cancelled.\n");
+            return;
+        }
+
         if(sessionId != -1) {
             startGame(sessionId, client, &context->clients[opponentIndex], context);
         }
@@ -566,7 +573,8 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
 
     int house = atoi(buffer);
     if(!verifyMove(&session->game, house - 1)) {
-        write_client(client->sock, "Invalid move. Please enter a number between 1 and 6.\n");
+        char * message = strcat(session->game.message, "\n");
+        write_client(client->sock, message);
         return;
     }
 
@@ -1105,7 +1113,7 @@ void startGame(int sessionId, Client* client1, Client* client2, ServerContext* c
     
     write_client(client1->sock, serializedGame);
     write_client(client2->sock, serializedGame);
-    
+
     if(session->currentPlayerIndex == 0) {
         write_client(client1->sock, "Your turn!\n");
         write_client(client2->sock, "Waiting for opponent...\n");
@@ -1126,16 +1134,11 @@ void printUpdatedElo(Client* player1, Client* player2) {
 
 // Fonction pour gérer la fin d'une partie -- command (should be changed to util)
 void handleGameOver(GameSession* session) {
-    char message[BUF_SIZE];
-    if(session->game.winner == 0) {
-        snprintf(message, sizeof(message), "Game Over! %s wins with %d points!\n", session->player1->name, session->game.score[0]);
-    } else if(session->game.winner == 1) {
-        snprintf(message, sizeof(message), "Game Over! %s wins with %d points!\n", session->player2->name, session->game.score[1]);
-    } else {
-        snprintf(message, sizeof(message), "Game Over! It's a tie with %d points each!\n", session->game.score[0]);
-    }
-    write_client(session->player1->sock, message);
-    write_client(session->player2->sock, message);
+    // Reset du joueur
+    session->player1->inGameOpponent = -1;
+    session->player2->inGameOpponent = -1;
+    session->player1->challengedBy = -1;
+    session->player2->challengedBy = -1;
     session->isActive = 0;
 }
 

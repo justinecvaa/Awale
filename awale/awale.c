@@ -59,6 +59,22 @@ void checkGameOver(AwaleGame* game) {
             }
         }
     }
+
+    // On regarde si le joueur qui joue ensuite est en famine (règle rajoutée)
+    for(int i = 0; i < HOUSES; i++) {
+        if(game->board[1 - game->currentPlayer][i] > 0) {
+            break;
+        }
+        if(i == HOUSES - 1) {
+            if(game->currentPlayer == 0) {
+                famine1 = true;
+            } else {
+                famine2 = true;
+            }
+        }
+    }
+
+
     if (famine1 || famine2) { // Si un joueur est en famine, la partie est terminée et on rajoute toutes les graines au score de l'autre joueur
         if (famine1) { //Si le joueur 1 est en famine, on donne toutes les graines restantes au joueur 2
             for (int i = 0; i < HOUSES; i++) {
@@ -79,13 +95,21 @@ void checkGameOver(AwaleGame* game) {
         // Déterminer le gagnant
         if (game->score[0] > game->score[1]) {
             game->winner = 0;
-            sprintf(game->message, "Player 1 wins %swith %d points", famine2 ? "by famine " : "", game->score[0]);
+            if (famine2) {
+                sprintf(game->message, "Game over ! %s wins by famine with %d points", game->playerNames[0], game->score[0]);
+            } else {
+                sprintf(game->message, "Game over ! %s wins with %d points", game->playerNames[0], game->score[0]);
+            }
         } else if (game->score[1] > game->score[0]) {
             game->winner = 1;
-            sprintf(game->message, "Player 2 wins %swith %d points!", famine1 ? "by famine " : "", game->score[1]);
+            if (famine1) {
+                sprintf(game->message, "Game over ! %s wins by famine with %d points", game->playerNames[1], game->score[1]);
+            } else {
+                sprintf(game->message, "Game over ! %s wins with %d points", game->playerNames[1], game->score[1]);
+            }
         } else {
             game->winner = 2;
-            sprintf(game->message, "It's a tie with %d points each!", game->score[0]);
+            sprintf(game->message, "Game over ! It's a tie with %d points each!", game->score[0]);
         }
     }
 }
@@ -102,8 +126,12 @@ bool verifyMove(AwaleGame* game, int house) {
             return false;
         }
     }
-    if (house < 0 || house >= HOUSES || game->board[game->currentPlayer][house] == 0) {
-        strcpy(game->message, "Invalid move");
+    if (house < 0 || house >= HOUSES) {
+        strcpy(game->message, "Invalid house");
+        return false;
+    }
+    if(game->board[game->currentPlayer][house] == 0){
+        strcpy(game->message, "House is empty");
         return false;
     }
     return true;
@@ -191,35 +219,14 @@ bool makeMove(AwaleGame *game, int house) {
     strcpy(game->message, message);
     printf("Debug - %s\n", message);
 
-    // Vérifier si le jeu est terminé
-    bool gameEnded = true;
-    for (int i = 0; i < 6; i++) {
-        if (game->board[0][i] > 0 || game->board[1][i] > 0) {
-            gameEnded = false;
-            break;
-        }
-    }
+    checkGameOver(game);
 
-    if (gameEnded) {
-        game->gameOver = true;
-        // Déterminer le gagnant
-        if (game->score[0] > game->score[1]) {
-            game->winner = 0;
-        } else if (game->score[1] > game->score[0]) {
-            game->winner = 1;
-        } else {
-            game->winner = -1; // Match nul
-        }
-        printf("Debug - Game over. Winner: %d\n", game->winner);
-    }
-
-    // Mise à jour du joueur courant après vérification
-    if (!game->gameOver) {
+    if(!game->gameOver) {
         game->currentPlayer = 1 - game->currentPlayer;
         printf("Debug - Next player: %d\n", game->currentPlayer + 1);
     }
 
-    // Mettre à jour l'histoire des mouvements
+    // Mettre à jour l'historique des mouvements
     if (game->moveCount < MAX_MOVES) {
         AwaleMove* move = &game->moveHistory[game->moveCount];
         move->timestamp = time(NULL);
