@@ -294,7 +294,7 @@ bool loadGame(AwaleGame *game, const char *saveName, char *player1Name, char *pl
         }
         
         // Inverse le joueur courant car les positions sont inversées
-        game->currentPlayer = game->currentPlayer;
+        //game->currentPlayer = game->currentPlayer;
     } else {
         // Si pas de swap, on garde les noms dans l'ordre original
         strcpy(game->playerNames[0], player1Name);
