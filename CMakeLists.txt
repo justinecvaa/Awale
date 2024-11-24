@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Create directories in build folder
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/saves)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/clients)
 
 # Common source files
 set(SERVER_SOURCES

@@ -290,11 +290,12 @@ void handleClientDisconnect(int clientIndex, ServerContext* context) {
 
             // Mettre à jour les ELO
             updateElo(session->player1, session->player2, (session->player1 == client) ? 1 : 0);
-            printUpdatedElo(session->player1, session->player2);
+            printUpdatedElo(otherPlayer);
         }
 
         // Nettoyer les spectateurs
         for (int i = 0; i < session->spectatorCount; i++) {
+            printf("Removing spectator %s\n", session->spectators[i]->name);
             if (session->spectators[i] && session->spectators[i]->sock != INVALID_SOCKET) {
                 write_client(session->spectators[i]->sock, "Game ended due to player disconnection.\n");
             }
@@ -562,7 +563,9 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         write_client(session->player1->sock, message);
         write_client(session->player2->sock, message);
 
-        printUpdatedElo(session->player1, session->player2);
+        printUpdatedElo(session->player1);
+        printUpdatedElo(session->player2);
+
         return;
     }
     
@@ -604,7 +607,8 @@ void handleGameMove(int sessionId, Client* client, const char* buffer, ServerCon
         if(session->game.gameOver) {
             handleGameOver(session);
             updateElo(session->player1, session->player2, session->game.winner);
-            printUpdatedElo(session->player1, session->player2);
+            printUpdatedElo(session->player1);
+            printUpdatedElo(session->player2);
         }
     }
 }
@@ -972,7 +976,7 @@ void handleHelp(Client* client) {
     write_client(client->sock, "unwatch: Stop watching a game");
     write_client(client->sock, "biography: Read your biography");
     write_client(client->sock, "biography write <biography>: Write your biography");
-    write_client(client->sock, "biography read <name>: Read the biography of another client");
+    write_client(client->sock, "biography read [name]: Read the biography of another client or yours if no name is provided");
     write_client(client->sock, "friends: List your friends");
     write_client(client->sock, "friend <name>: Add a friend");
     write_client(client->sock, "unfriend <name>: Remove a friend");
@@ -980,12 +984,13 @@ void handleHelp(Client* client) {
     write_client(client->sock, "privacy: View your privacy settings");
     write_client(client->sock, "all <message>: Send a message to all clients");
     write_client(client->sock, "private <name> <message>: Send a private message to a client");
+    write_client(client->sock, "private friends <message>: Send a private message to all friends");
     write_client(client->sock, "re <message>: Send a message to the last person you talked to");
     write_client(client->sock, "help: Display this help message");
     write_client(client->sock, "quit: Exit a game");
     write_client(client->sock, "save state <save_name>: Save the state of the game");
     write_client(client->sock, "save game <save_name>: Save the game");
-    write_client(client->sock, "load state <save_name>: Load a game state to continue playing");
+    write_client(client->sock, "load <save_name>: Load a game state to continue playing");
     write_client(client->sock, "list saves: List all saved games");
     write_client(client->sock, "elo: View your ELO rating");
     write_client(client->sock, "exit: Disconnect from the server");
@@ -1019,6 +1024,9 @@ void handleExit(Client* client, ServerContext* context) {
             GameSession* session = &context->gameSessions[gameSession];
             Client* otherPlayer = (session->player1 == client) ? session->player2 : session->player1;
             write_client(otherPlayer->sock, "Your opponent disconnected. Game Over!\n");
+            // Mettre à jour les ELO
+            updateElo(session->player1, session->player2, (session->player1 == client) ? 1 : 0);
+            printUpdatedElo(otherPlayer);
             otherPlayer->inGameOpponent = -1;
             otherPlayer->challengedBy = -1;
             session->isActive = 0;
@@ -1123,16 +1131,14 @@ void startGame(int sessionId, Client* client1, Client* client2, ServerContext* c
     }
 }
 
-// Fonction qui affiche l'elo mis à jour des joueurs -- util
-void printUpdatedElo(Client* player1, Client* player2) {
+// Fonction qui affiche l'elo mis à jour des joueurs 
+void printUpdatedElo(Client* player) {
     char message[BUF_SIZE];
-    snprintf(message, sizeof(message), "Updated ELO ratings: %s: %d\n", player1->name, player1->elo);
-    write_client(player1->sock, message);
-    snprintf(message, sizeof(message), "Updated ELO ratings: %s: %d\n", player2->name, player2->elo);
-    write_client(player2->sock, message);
+    snprintf(message, sizeof(message), "Updated ELO ratings: %s: %d\n", player->name, player->elo);
+    write_client(player->sock, message);
 }
 
-// Fonction pour gérer la fin d'une partie -- command (should be changed to util)
+// Fonction pour gérer la fin d'une partie 
 void handleGameOver(GameSession* session) {
     // Reset du joueur
     session->player1->inGameOpponent = -1;
