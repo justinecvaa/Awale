@@ -27,6 +27,8 @@ Ce projet implémente une version réseau du jeu traditionnel Awale (aussi connu
 - Liste des joueurs connectés
 - Liste des parties en cours
 - Sauvegarde des états de jeu
+- Sauvegarde des jeux complets
+- Chargement d'un état de jeu
 - Gestion automatique des déconnexions
 - Persistance des clients
 
